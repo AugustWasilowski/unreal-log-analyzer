@@ -1,8 +1,13 @@
-# Ignore everything in the root directory
+# Ignore everything by default
 *
 
-# But don't ignore the log_analyzer folder
-!log_analyzer/
-
-# Don't ignore .gitignore itself
+# Allow these files and folders
+!app.py
+!Procfile
+!requirements.txt
+!README.md
 !.gitignore
+!static/
+!static/**
+!templates/
+!templates/**
