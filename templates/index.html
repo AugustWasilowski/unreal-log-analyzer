@@ -121,7 +121,7 @@
                     <label for="logFile" class="form-label">Upload Log File</label>
                     <input type="file" class="form-control" id="logFile" accept=".log,.txt">
                 </div>
-                <button type="submit" class="btn btn-primary">Refresh</button>
+                <button type="submit" class="btn btn-primary" id="uploadButton">Refresh</button>
             </form>
         </div>
 
@@ -157,11 +157,16 @@
             e.preventDefault();
             const fileInput = document.getElementById('logFile');
             const file = fileInput.files[0];
+            const uploadButton = document.getElementById('uploadButton');
             
             if (!file) {
                 alert('Please select a file');
                 return;
             }
+
+            // Show loading state
+            uploadButton.textContent = 'Loading...';
+            uploadButton.disabled = true;
 
             const formData = new FormData();
             formData.append('file', file);
@@ -187,6 +192,10 @@
             } catch (error) {
                 alert('Error uploading file');
                 console.error(error);
+            } finally {
+                // Reset button state
+                uploadButton.textContent = 'Refresh';
+                uploadButton.disabled = false;
             }
         });
 
