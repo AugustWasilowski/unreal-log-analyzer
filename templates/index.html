@@ -132,6 +132,9 @@
                     <span class="ms-2"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-down" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg></span>
                 </a>
             </h5>
+            <div class="mb-3">
+                <input type="text" class="form-control" id="logSearchInput" placeholder="Search log content...">
+            </div>
             <div class="collapse show" id="logTypeFiltersCollapse">
                 <div class="mb-3" id="logLevelFilters">
                     <label class="form-check-label me-3"><input class="form-check-input me-1 log-level-filter" type="checkbox" value="Display" checked>Display <span class="badge bg-secondary" id="count-Display">0</span></label>
@@ -302,11 +305,16 @@
             document.getElementById('count-Error').textContent = counts.Error;
         }
 
+        function getSearchTerm() {
+            return document.getElementById('logSearchInput').value.trim().toLowerCase();
+        }
+
         function displayLogEntries(entries) {
             const container = document.getElementById('logContent');
             container.innerHTML = '';
             const selectedLevels = getSelectedLogLevels();
             const selectedTypes = Array.from(document.querySelectorAll('#logTypeFilters input:checked')).map(cb => cb.value);
+            const searchTerm = getSearchTerm();
             
             // Update log level counts for the current filtered log types
             let filteredForLevelCount = entries.filter(entry => !selectedTypes.length || selectedTypes.includes(entry.type));
@@ -322,6 +330,8 @@
                 else if (/\bError\b/i.test(entry.content)) level = 'Error';
                 else if (/\bDisplay\b/i.test(entry.content)) level = 'Display';
                 if (selectedLevels.length && !selectedLevels.includes(level)) return;
+                // Filter by search term (content only)
+                if (searchTerm && !entry.content.toLowerCase().includes(searchTerm)) return;
 
                 const div = document.createElement('div');
                 div.className = 'log-entry';
@@ -341,6 +351,10 @@
                     updateAllLogTypeCounts();
                     displayLogEntries(allLogEntries);
                 });
+            });
+            // Add event listener for search input
+            document.getElementById('logSearchInput').addEventListener('input', function() {
+                displayLogEntries(allLogEntries);
             });
         });
     </script>
