@@ -234,8 +234,9 @@
         }
 
         function updateLogTypeCountsForLevels(entries, logTypes) {
-            // Count only entries matching the current log level filter
+            // Count only entries matching the current log level filter and search term
             const selectedLevels = getSelectedLogLevels();
+            const searchTerm = getSearchTerm();
             const counts = {};
             logTypes.forEach(typeObj => counts[typeObj.type] = 0);
             entries.forEach(entry => {
@@ -244,6 +245,8 @@
                 else if (/\bError\b/i.test(entry.content)) level = 'Error';
                 else if (/\bDisplay\b/i.test(entry.content)) level = 'Display';
                 if (selectedLevels.length && !selectedLevels.includes(level)) return;
+                // Filter by search term (content only)
+                if (searchTerm && !entry.content.toLowerCase().includes(searchTerm)) return;
                 if (counts.hasOwnProperty(entry.type)) counts[entry.type]++;
             });
             logTypes.forEach(typeObj => {
@@ -354,6 +357,7 @@
             });
             // Add event listener for search input
             document.getElementById('logSearchInput').addEventListener('input', function() {
+                updateAllLogTypeCounts();
                 displayLogEntries(allLogEntries);
             });
         });
