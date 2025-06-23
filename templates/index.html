@@ -111,7 +111,6 @@
 <body>
     <div class="container">
         <h1 class="mb-4">
-            <img src="{{ url_for('static', filename='MayorAwesome.png') }}" alt="Logo" style="width: 35px; height: 35px; margin-right: 10px; vertical-align: middle;">
             Unreal Engine Log Analyzer
         </h1>
         
@@ -150,6 +149,13 @@
         <div class="log-container" id="logContent">
             <!-- Log entries will be displayed here -->
         </div>
+        
+        <footer class="mt-5 pt-4 border-top border-secondary">
+            <div class="text-center">
+                <img src="{{ url_for('static', filename='MayorAwesome.png') }}" alt="Mayor Awesome" style="width: 35px; height: 35px; margin-right: 10px; vertical-align: middle;">
+                <span>Vibe-coded by <a href="https://linktr.ee/mayorawesome" target="_blank" class="text-decoration-none">Mayor Awesome</a></span>
+            </div>
+        </footer>
     </div>
 
     <script>
