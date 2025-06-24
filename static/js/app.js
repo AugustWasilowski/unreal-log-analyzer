@@ -49,6 +49,14 @@ class LogAnalyzerApp {
         });
     }
 
+    // Handle state change
+    handleStateChange(state) {
+        // Update display when state changes (but no loading state management)
+        if (state.allEntries.length > 0) {
+            this.updateDisplay();
+        }
+    }
+
     // Handle file upload
     async handleFileUpload() {
         const file = this.ui.elements.logFile.files[0];
@@ -61,18 +69,24 @@ class LogAnalyzerApp {
         // Show loading state
         this.ui.updateButtonText('Loading...');
         this.ui.setButtonDisabled(true);
-        this.appState.setLoading(true, 'Uploading file...');
+        
+        // Temporarily disable state subscriptions to prevent interference
+        this.appState.pauseSubscriptions();
 
         try {
             const data = await API.uploadFile(file);
             
-            // Update state
-            this.appState.setCurrentFile(file.name);
-            this.appState.setAllEntries(data.entries);
-            this.appState.setLogTypes(data.log_types);
+            // First, update the data state
+            this.appState.update({
+                currentFile: file.name,
+                allEntries: data.entries,
+                logTypes: data.log_types
+            });
             
             // Update UI
             this.ui.createLogTypeFilters(data.log_types);
+            
+            // Update display directly
             this.updateDisplay();
             
         } catch (error) {
@@ -81,7 +95,9 @@ class LogAnalyzerApp {
             // Reset UI state
             this.ui.updateButtonText('Refresh');
             this.ui.setButtonDisabled(false);
-            this.appState.setLoading(false);
+            
+            // Re-enable state subscriptions
+            this.appState.resumeSubscriptions();
         }
     }
 
@@ -89,23 +105,14 @@ class LogAnalyzerApp {
     handleSearchChange() {
         const searchTerm = this.ui.getSearchTerm();
         this.appState.updateFilters({ search: searchTerm });
+        this.updateDisplay();
     }
 
     // Handle level filter change
     handleLevelFilterChange() {
         const selectedLevels = this.ui.getSelectedLogLevels();
         this.appState.updateFilters({ levels: selectedLevels });
-    }
-
-    // Handle state change
-    handleStateChange(state) {
-        // Update loading state
-        Utils.showLoading(state.ui.isLoading, state.ui.loadingMessage);
-        
-        // Update display if we have entries
-        if (state.allEntries.length > 0) {
-            this.updateDisplay();
-        }
+        this.updateDisplay();
     }
 
     // Update display based on current state

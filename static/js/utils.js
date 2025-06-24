@@ -104,25 +104,6 @@ class Utils {
         }
     }
 
-    // Loading state management
-    static showLoading(show = true, message = 'Loading...') {
-        let loadingOverlay = document.getElementById('loadingOverlay');
-        if (!loadingOverlay) {
-            loadingOverlay = this.createElement('div', 'position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center', {
-                id: 'loadingOverlay'
-            });
-            loadingOverlay.style.cssText = 'background: rgba(0,0,0,0.5); z-index: 9999; display: none;';
-            loadingOverlay.innerHTML = `
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">${this.sanitizeInput(message)}</span>
-                </div>
-            `;
-            document.body.appendChild(loadingOverlay);
-        }
-        
-        loadingOverlay.style.display = show ? 'flex' : 'none';
-    }
-
     // Copy text to clipboard with fallback
     static async copyToClipboard(text) {
         try {

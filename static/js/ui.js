@@ -114,6 +114,7 @@ class UI {
         const selectedTypes = Array.from(document.querySelectorAll('#logTypeFilters input:checked'))
             .map(checkbox => checkbox.value);
         window.app.appState.updateFilters({ types: selectedTypes });
+        window.app.updateDisplay();
     }
 
     // Get selected log levels from UI

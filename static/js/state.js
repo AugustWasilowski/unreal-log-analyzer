@@ -9,13 +9,10 @@ class AppState {
                 levels: ['Display', 'Warning', 'Error'],
                 types: [],
                 search: ''
-            },
-            ui: {
-                isLoading: false,
-                loadingMessage: ''
             }
         };
         this.listeners = [];
+        this.subscriptionsPaused = false;
     }
 
     // Get current state
@@ -35,11 +32,6 @@ class AppState {
         this.notifyListeners();
     }
 
-    updateUI(ui) {
-        this.state.ui = { ...this.state.ui, ...ui };
-        this.notifyListeners();
-    }
-
     // Subscribe to state changes
     subscribe(listener) {
         this.listeners.push(listener);
@@ -50,6 +42,21 @@ class AppState {
 
     // Notify all listeners
     notifyListeners() {
+        if (this.subscriptionsPaused) {
+            return;
+        }
+        this.listeners.forEach(listener => listener(this.state));
+    }
+
+    // Pause state subscriptions
+    pauseSubscriptions() {
+        this.subscriptionsPaused = true;
+    }
+
+    // Resume state subscriptions
+    resumeSubscriptions() {
+        this.subscriptionsPaused = false;
+        // Notify listeners with current state
         this.listeners.forEach(listener => listener(this.state));
     }
 
@@ -64,10 +71,6 @@ class AppState {
 
     setLogTypes(logTypes) {
         this.update({ logTypes });
-    }
-
-    setLoading(isLoading, message = 'Loading...') {
-        this.updateUI({ isLoading, loadingMessage: message });
     }
 
     getFilteredEntries() {
