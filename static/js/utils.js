@@ -125,6 +125,33 @@ class Utils {
             }
         }
     }
+
+    // Announce changes to screen readers
+    static announceToScreenReader(message) {
+        const liveRegion = document.getElementById('liveRegion');
+        if (liveRegion) {
+            liveRegion.textContent = message;
+            // Clear after a short delay to allow for multiple announcements
+            setTimeout(() => {
+                liveRegion.textContent = '';
+            }, 1000);
+        }
+    }
+
+    // Format number with commas
+    static formatNumber(num) {
+        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
+    // Validate regex pattern
+    static isValidRegex(pattern) {
+        try {
+            new RegExp(pattern);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
 }
 
 // Export for use in other modules

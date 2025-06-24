@@ -1,45 +1,93 @@
-// Main application module
+// Main application module - VERSION 1.3
+
 class LogAnalyzerApp {
     constructor() {
         this.appState = new AppState();
         this.ui = new UI();
+        
+        // Initialize UI first, then setup event listeners
+        this.initializeApp();
+    }
+
+    // Initialize the application
+    initializeApp() {
+        // Try to initialize UI
+        this.ui.initialize();
+        
+        // Setup event listeners and state subscriptions
         this.setupEventListeners();
         this.setupStateSubscriptions();
-        this.ui.setupKeyboardNavigation();
     }
 
     // Setup event listeners
     setupEventListeners() {
         // File upload
-        this.ui.elements.uploadForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.handleFileUpload();
-        });
+        if (this.ui.elements.uploadForm) {
+            this.ui.elements.uploadForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleFileUpload();
+            });
+        }
 
-        this.ui.elements.logFile.addEventListener('change', () => {
-            if (this.ui.elements.logFile.files.length > 0) {
-                this.ui.elements.uploadForm.requestSubmit();
-            }
-        });
+        if (this.ui.elements.logFile) {
+            this.ui.elements.logFile.addEventListener('change', () => {
+                if (this.ui.elements.logFile.files.length > 0) {
+                    this.ui.elements.uploadForm.requestSubmit();
+                }
+            });
+        }
 
         // Search input with debouncing
-        const debouncedSearch = Utils.debounce(() => {
-            this.handleSearchChange();
-        }, 300);
+        if (this.ui.elements.logSearchInput) {
+            const debouncedSearch = Utils.debounce(() => {
+                this.handleSearchChange();
+            }, 300);
 
-        this.ui.elements.logSearchInput.addEventListener('input', debouncedSearch);
+            this.ui.elements.logSearchInput.addEventListener('input', debouncedSearch);
+        }
+
+        // Advanced search options
+        if (this.ui.elements.caseSensitive) {
+            this.ui.elements.caseSensitive.addEventListener('change', () => {
+                this.handleSearchOptionsChange();
+            });
+        }
+
+        if (this.ui.elements.useRegex) {
+            this.ui.elements.useRegex.addEventListener('change', () => {
+                this.handleSearchOptionsChange();
+            });
+        }
 
         // Log level filters
-        document.querySelectorAll('.log-level-filter').forEach(cb => {
-            cb.addEventListener('change', () => {
-                this.handleLevelFilterChange();
+        const levelFilters = document.querySelectorAll('.log-level-filter');
+        if (levelFilters.length > 0) {
+            levelFilters.forEach(cb => {
+                cb.addEventListener('change', () => {
+                    this.handleLevelFilterChange();
+                });
             });
-        });
+        }
 
         // Copy button
-        this.ui.elements.copyButton.addEventListener('click', () => {
-            this.ui.copyFilteredResults();
-        });
+        if (this.ui.elements.copyButton) {
+            this.ui.elements.copyButton.addEventListener('click', () => {
+                this.ui.copyFilteredResults();
+            });
+        }
+
+        // Export buttons
+        if (this.ui.elements.exportCsv) {
+            this.ui.elements.exportCsv.addEventListener('click', () => {
+                this.ui.exportToCsv();
+            });
+        }
+
+        if (this.ui.elements.exportJson) {
+            this.ui.elements.exportJson.addEventListener('click', () => {
+                this.ui.exportToJson();
+            });
+        }
     }
 
     // Setup state subscriptions
@@ -104,7 +152,12 @@ class LogAnalyzerApp {
     // Handle search change
     handleSearchChange() {
         const searchTerm = this.ui.getSearchTerm();
-        this.appState.updateFilters({ search: searchTerm });
+        const searchOptions = this.ui.getSearchOptions();
+        this.appState.updateFilters({ 
+            search: searchTerm,
+            caseSensitive: searchOptions.caseSensitive,
+            useRegex: searchOptions.useRegex
+        });
         this.updateDisplay();
     }
 
@@ -112,6 +165,16 @@ class LogAnalyzerApp {
     handleLevelFilterChange() {
         const selectedLevels = this.ui.getSelectedLogLevels();
         this.appState.updateFilters({ levels: selectedLevels });
+        this.updateDisplay();
+    }
+
+    // Handle search options change
+    handleSearchOptionsChange() {
+        const searchOptions = this.ui.getSearchOptions();
+        this.appState.updateFilters({ 
+            caseSensitive: searchOptions.caseSensitive,
+            useRegex: searchOptions.useRegex
+        });
         this.updateDisplay();
     }
 
@@ -133,6 +196,12 @@ class LogAnalyzerApp {
 }
 
 // Initialize app when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    window.app = LogAnalyzerApp.init();
-}); 
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        window.app = LogAnalyzerApp.init();
+    });
+} else {
+    setTimeout(() => {
+        window.app = LogAnalyzerApp.init();
+    }, 100);
+} 

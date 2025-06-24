@@ -1,6 +1,13 @@
-// UI management and rendering
+// UI management and rendering - VERSION 1.3
+
 class UI {
     constructor() {
+        // Don't initialize elements immediately - wait for app to call initialize()
+        this.elements = {};
+        this.initialized = false;
+    }
+
+    initializeElements() {
         this.elements = {
             uploadForm: document.getElementById('uploadForm'),
             logFile: document.getElementById('logFile'),
@@ -10,13 +17,162 @@ class UI {
             logTypeFilters: document.getElementById('logTypeFilters'),
             logLevelFilters: document.getElementById('logLevelFilters'),
             copyButton: document.getElementById('copyButton'),
-            copyToast: document.getElementById('copyToast')
+            copyToast: document.getElementById('copyToast'),
+            dropZone: document.getElementById('dropZone'),
+            exportCsv: document.getElementById('exportCsv'),
+            exportJson: document.getElementById('exportJson'),
+            caseSensitive: document.getElementById('caseSensitive'),
+            useRegex: document.getElementById('useRegex'),
+            searchHistory: document.getElementById('searchHistory'),
+            clearHistory: document.getElementById('clearHistory')
         };
+    }
+
+    // Initialize UI after app is ready
+    initialize() {
+        if (this.initialized) {
+            return;
+        }
+        
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                this.initialize();
+            });
+            return;
+        }
+        
+        // Check for dependencies
+        console.log('Checking dependencies...');
+        console.log('Bootstrap available:', typeof bootstrap !== 'undefined');
+        console.log('jQuery available:', typeof $ !== 'undefined');
+        
+        // Initialize elements first
+        this.initializeElements();
+        
+        console.log('Setting up drag and drop...');
+        this.setupDragAndDrop();
+        console.log('Setting up search history...');
+        this.setupSearchHistory();
+        console.log('Setting up keyboard navigation...');
+        this.setupKeyboardNavigation();
+        this.initialized = true;
+    }
+
+    // Setup drag and drop functionality
+    setupDragAndDrop() {
+        const dropZone = this.elements.dropZone;
+        
+        // Check if dropZone exists
+        if (!dropZone) {
+            return;
+        }
+        
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                dropZone.classList.add('drag-over');
+                if (window.app && window.app.appState) {
+                    window.app.appState.update({ ui: { dragOver: true } });
+                }
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                dropZone.classList.remove('drag-over');
+                if (window.app && window.app.appState) {
+                    window.app.appState.update({ ui: { dragOver: false } });
+                }
+            });
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.type === 'text/plain' || file.name.endsWith('.log') || file.name.endsWith('.txt')) {
+                    this.elements.logFile.files = e.dataTransfer.files;
+                    this.elements.uploadForm.requestSubmit();
+                } else {
+                    Utils.showErrorToast('Please select a valid log file (.log or .txt)');
+                }
+            }
+        });
+
+        // Click to browse
+        dropZone.addEventListener('click', () => {
+            this.elements.logFile.click();
+        });
+
+        dropZone.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                this.elements.logFile.click();
+            }
+        });
+    }
+
+    // Setup search history functionality
+    setupSearchHistory() {
+        const historyContainer = this.elements.searchHistory;
+        const clearHistoryBtn = this.elements.clearHistory;
+        
+        // Check if elements exist
+        if (!historyContainer || !clearHistoryBtn) {
+            return;
+        }
+        
+        // Update search history display
+        const updateHistoryDisplay = () => {
+            if (!window.app || !window.app.appState) return;
+            
+            const history = window.app.appState.getState().searchHistory;
+            
+            if (history.length === 0) {
+                historyContainer.innerHTML = '<em class="text-muted">No recent searches</em>';
+                return;
+            }
+            
+            historyContainer.innerHTML = history.map(term => 
+                `<button class="dropdown-item search-history-item" data-term="${Utils.sanitizeInput(term)}">${Utils.sanitizeInput(term)}</button>`
+            ).join('');
+            
+            // Add click handlers to history items
+            historyContainer.querySelectorAll('.search-history-item').forEach(button => {
+                button.addEventListener('click', () => {
+                    const term = button.dataset.term;
+                    this.elements.logSearchInput.value = term;
+                    this.elements.logSearchInput.dispatchEvent(new Event('input'));
+                });
+            });
+        };
+
+        // Clear history button
+        clearHistoryBtn.addEventListener('click', () => {
+            if (window.app && window.app.appState) {
+                window.app.appState.clearSearchHistory();
+                updateHistoryDisplay();
+            }
+        });
+
+        // Subscribe to state changes for history updates
+        if (window.app && window.app.appState) {
+            window.app.appState.subscribe(() => {
+                updateHistoryDisplay();
+            });
+        }
     }
 
     // Display log entries with DocumentFragment for performance
     displayLogEntries(entries) {
-        // Remove only log entries, preserve the copy button
+        // Remove only log entries, preserve the copy button and export buttons
         const logEntries = this.elements.logContent.querySelectorAll('.log-entry');
         logEntries.forEach(entry => entry.remove());
         
@@ -42,6 +198,9 @@ class UI {
         });
         
         this.elements.logContent.appendChild(fragment);
+        
+        // Announce to screen readers
+        Utils.announceToScreenReader(`Displaying ${Utils.formatNumber(entries.length)} log entries`);
     }
 
     // Create log type filters
@@ -128,6 +287,27 @@ class UI {
         return this.elements.logSearchInput.value.trim();
     }
 
+    // Get search options from UI
+    getSearchOptions() {
+        const options = {
+            caseSensitive: this.elements.caseSensitive.checked,
+            useRegex: this.elements.useRegex.checked
+        };
+        
+        // Validate regex if enabled
+        if (options.useRegex && this.elements.logSearchInput.value) {
+            if (!Utils.isValidRegex(this.elements.logSearchInput.value)) {
+                Utils.showErrorToast('Invalid regular expression pattern');
+                return {
+                    caseSensitive: options.caseSensitive,
+                    useRegex: false // Disable regex on invalid pattern
+                };
+            }
+        }
+        
+        return options;
+    }
+
     // Update button text
     updateButtonText(text) {
         this.elements.uploadButton.textContent = text;
@@ -145,6 +325,45 @@ class UI {
 
     focusCopyButton() {
         this.elements.copyButton.focus();
+    }
+
+    // Export functionality
+    exportToCsv() {
+        const entries = window.app.appState.getFilteredEntries();
+        const csvContent = this.generateCsvContent(entries);
+        this.downloadFile(csvContent, 'log_entries.csv', 'text/csv');
+    }
+
+    exportToJson() {
+        const entries = window.app.appState.getFilteredEntries();
+        const jsonContent = JSON.stringify(entries, null, 2);
+        this.downloadFile(jsonContent, 'log_entries.json', 'application/json');
+    }
+
+    generateCsvContent(entries) {
+        const headers = ['Type', 'Level', 'Content'];
+        const rows = entries.map(entry => [
+            entry.type,
+            window.app.appState.detectLogLevel(entry.content),
+            entry.content.replace(/"/g, '""') // Escape quotes for CSV
+        ]);
+        
+        const csvRows = [headers, ...rows];
+        return csvRows.map(row => 
+            row.map(cell => `"${cell}"`).join(',')
+        ).join('\n');
+    }
+
+    downloadFile(content, filename, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 
     // Keyboard navigation support
@@ -175,6 +394,14 @@ class UI {
                         e.preventDefault();
                         this.elements.logFile.click();
                         break;
+                    case 's':
+                        e.preventDefault();
+                        this.exportToCsv();
+                        break;
+                    case 'j':
+                        e.preventDefault();
+                        this.exportToJson();
+                        break;
                 }
             }
         });
@@ -183,7 +410,11 @@ class UI {
         this.elements.logSearchInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                // Trigger search or focus next element
+                // Add to search history and trigger search
+                const term = this.getSearchTerm();
+                if (term) {
+                    window.app.appState.addToSearchHistory(term);
+                }
                 this.elements.copyButton.focus();
             } else if (e.key === 'Escape') {
                 e.preventDefault();
@@ -200,19 +431,18 @@ class UI {
             }
         });
 
-        // File input keyboard shortcuts
-        this.elements.logFile.addEventListener('keydown', (e) => {
+        // Export buttons keyboard shortcuts
+        this.elements.exportCsv.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                this.elements.logFile.click();
+                this.exportToCsv();
             }
         });
 
-        // Upload button keyboard shortcuts
-        this.elements.uploadButton.addEventListener('keydown', (e) => {
+        this.elements.exportJson.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                this.elements.uploadForm.requestSubmit();
+                this.exportToJson();
             }
         });
 
@@ -261,25 +491,21 @@ class UI {
         });
     }
 
-    // Copy filtered results
+    // Copy filtered results to clipboard
     async copyFilteredResults() {
-        const logEntries = this.elements.logContent.querySelectorAll('.log-entry');
-        
-        if (logEntries.length === 0) {
-            Utils.showErrorToast('No filtered results to copy');
+        const entries = window.app.appState.getFilteredEntries();
+        if (entries.length === 0) {
+            Utils.showErrorToast('No entries to copy');
             return;
         }
+
+        const text = entries.map(entry => `${entry.type}: ${entry.content}`).join('\n');
+        const success = await Utils.copyToClipboard(text);
         
-        let textToCopy = '';
-        logEntries.forEach(entry => {
-            textToCopy += entry.textContent + '\n';
-        });
-        
-        const success = await Utils.copyToClipboard(textToCopy);
         if (success) {
-            Utils.showSuccessToast('Copied filtered results to clipboard!');
+            Utils.showSuccessToast('Copied to clipboard!');
         } else {
-            Utils.showErrorToast('Failed to copy to clipboard. Please try again.');
+            Utils.showErrorToast('Failed to copy to clipboard');
         }
     }
 }

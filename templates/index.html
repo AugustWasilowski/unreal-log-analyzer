@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Unreal Engine Log Analyzer</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -108,9 +111,6 @@
             color: #ef9a9a;
         }
         .copy-button {
-            position: absolute;
-            top: 10px;
-            right: 10px;
             background-color: #007bff;
             border: none;
             color: white;
@@ -119,6 +119,10 @@
             cursor: pointer;
             z-index: 10;
             transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.9rem;
         }
         .copy-button:hover {
             background-color: #0056b3;
@@ -139,10 +143,146 @@
         .btn-close {
             filter: invert(1);
         }
+        
+        /* Drag and Drop Zone */
+        .drop-zone {
+            border: 2px dashed #444;
+            border-radius: 8px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background-color: #1e2124;
+            position: relative;
+        }
+        
+        .drop-zone:hover {
+            border-color: #007bff;
+            background-color: #2a2d30;
+        }
+        
+        .drop-zone.drag-over {
+            border-color: #28a745;
+            background-color: #1e3a1e;
+            transform: scale(1.02);
+        }
+        
+        .drop-zone.drag-over .drop-zone-text {
+            color: #28a745;
+        }
+        
+        .drop-zone-content {
+            pointer-events: none;
+        }
+        
+        .drop-zone-text {
+            font-size: 1.2rem;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #e0e0e0;
+        }
+        
+        .drop-zone-subtext {
+            font-size: 0.9rem;
+            color: #888;
+            margin: 0;
+        }
+        
+        .visually-hidden {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+        }
+        
+        /* Skip links for accessibility */
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 6px;
+            background: #007bff;
+            color: white;
+            padding: 8px;
+            text-decoration: none;
+            border-radius: 4px;
+            z-index: 1000;
+            transition: top 0.3s;
+        }
+        
+        .skip-link:focus {
+            top: 6px;
+        }
+        
+        /* Screen reader only class */
+        .sr-only {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+        }
+        
+        .export-buttons {
+            display: flex;
+            gap: 8px;
+            z-index: 10;
+            justify-content: flex-end;
+            margin-bottom: 10px;
+        }
+        
+        .export-button {
+            background-color: #28a745;
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.9rem;
+        }
+        
+        .export-button:hover {
+            background-color: #218838;
+        }
+        
+        .export-button:active {
+            background-color: #1e7e34;
+        }
+        
+        #exportJson {
+            background-color: #6f42c1;
+        }
+        
+        #exportJson:hover {
+            background-color: #5a32a3;
+        }
+        
+        #exportJson:active {
+            background-color: #4c2b8a;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
+    <!-- Skip links for accessibility -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <a href="#logContent" class="skip-link">Skip to log entries</a>
+    
+    <!-- Live region for dynamic content announcements -->
+    <div aria-live="polite" aria-atomic="true" class="sr-only" id="liveRegion"></div>
+    
+    <div class="container" id="main-content">
         <h1 class="mb-4">
             Unreal Engine Log Analyzer
         </h1>
@@ -151,9 +291,23 @@
             <form id="uploadForm" class="mb-3" role="form" aria-label="Log file upload form">
                 <div class="mb-3">
                     <label for="logFile" class="form-label">Upload Log File</label>
-                    <input type="file" class="form-control" id="logFile" accept=".log,.txt" 
-                           aria-describedby="fileHelp" tabindex="0">
-                    <div id="fileHelp" class="form-text">Select a .log or .txt file to analyze</div>
+                    <div class="drop-zone" id="dropZone" 
+                         role="button" 
+                         tabindex="0"
+                         aria-label="Drag and drop log files here or click to browse"
+                         aria-describedby="dropZoneHelp">
+                        <div class="drop-zone-content">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="bi bi-cloud-upload mb-3" viewBox="0 0 16 16">
+                                <path fill-rule="evenodd" d="M4.406 1.342A5.53 5.53 0 0 1 8 0c2.69 0 4.923 2 5.166 4.579C14.758 4.804 16 6.137 16 7.773 16 9.569 14.502 11 12.687 11H10a.5.5 0 0 1 0-1h2.688C13.979 10 15 8.988 15 7.773c0-1.216-1.02-2.228-2.313-2.228h-.5v-.5C12.188 2.825 10.328 1 8 1a4.53 4.53 0 0 0-2.941 1.1c-.757.652-1.153 1.438-1.153 2.055v.448l-.445.049C2.064 4.805 1 5.952 1 7.318 1 8.785 2.21 10 3.781 10H6a.5.5 0 0 1 0 1H3.781C1.708 11 0 9.366 0 7.318c0-1.763 1.266-3.223 2.942-3.593.143-.863.698-1.723 1.464-2.383z"/>
+                                <path fill-rule="evenodd" d="M7.646 4.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 5.707V14.5a.5.5 0 0 1-1 0V5.707L5.354 7.854a.5.5 0 1 1-.708-.708l3-3z"/>
+                            </svg>
+                            <p class="drop-zone-text">Drag and drop log files here</p>
+                            <p class="drop-zone-subtext">or click to browse</p>
+                        </div>
+                        <input type="file" class="form-control visually-hidden" id="logFile" accept=".log,.txt" 
+                               aria-describedby="fileHelp" tabindex="-1">
+                    </div>
+                    <div id="dropZoneHelp" class="form-text">Select a .log or .txt file to analyze</div>
                 </div>
                 <button type="submit" class="btn btn-primary" id="uploadButton" 
                         aria-label="Upload and analyze log file">Refresh</button>
@@ -171,10 +325,43 @@
             </h5>
             <div class="mb-3">
                 <label for="logSearchInput" class="visually-hidden">Search log content</label>
-                <input type="text" class="form-control" id="logSearchInput" 
-                       placeholder="Search log content..." 
-                       aria-label="Search log entries"
-                       tabindex="0">
+                <div class="search-container">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="logSearchInput" 
+                               placeholder="Search log content..." 
+                               aria-label="Search log entries"
+                               tabindex="0">
+                        <button class="btn btn-outline-secondary dropdown-toggle" type="button" 
+                                data-bs-toggle="dropdown" aria-expanded="false"
+                                aria-label="Search options">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-gear" viewBox="0 0 16 16">
+                                <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
+                                <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159zM8 5.754a2.246 2.246 0 1 1 0 4.492 2.246 2.246 0 0 1 0-4.492z"/>
+                            </svg>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><h6 class="dropdown-header">Search Options</h6></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <label class="dropdown-item">
+                                    <input type="checkbox" id="caseSensitive" class="form-check-input me-2">
+                                    Case sensitive
+                                </label>
+                            </li>
+                            <li>
+                                <label class="dropdown-item">
+                                    <input type="checkbox" id="useRegex" class="form-check-input me-2">
+                                    Use regex
+                                </label>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">Recent Searches</h6></li>
+                            <li><div id="searchHistory" class="dropdown-item-text small"></div></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><button class="dropdown-item text-danger" id="clearHistory">Clear History</button></li>
+                        </ul>
+                    </div>
+                </div>
             </div>
             <div class="collapse show" id="logTypeFiltersCollapse">
                 <div class="mb-3" id="logLevelFilters" role="group" aria-label="Log level filters">
@@ -200,43 +387,61 @@
             </div>
         </div>
 
-        <div class="log-container" id="logContent" role="log" aria-label="Log entries display" tabindex="0">
+        <div class="log-container" id="logContent" role="log" aria-label="Log entries">
+            <div class="export-buttons d-flex justify-content-end" style="gap: 8px;">
+                <button class="export-button" id="exportCsv" 
+                        aria-label="Export as CSV"
+                        tabindex="0">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-spreadsheet" viewBox="0 0 16 16">
+                        <path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2zM9.5 3A1.5 1.5 0 0 0 11 4.5h2V9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5v2z"/>
+                        <path d="M4.5 12a.5.5 0 0 1 0-1h7a.5.5 0 0 1 0 1h-7zm0-2a.5.5 0 0 1 0-1h7a.5.5 0 0 1 0 1h-7zm0-2a.5.5 0 0 1 0-1h7a.5.5 0 0 1 0 1h-7z"/>
+                    </svg>
+                    CSV
+                </button>
+                <button class="export-button" id="exportJson" 
+                        aria-label="Export as JSON"
+                        tabindex="0">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-code" viewBox="0 0 16 16">
+                        <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/>
+                        <path d="M8.646 6.646a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1 0 .708l-2 2a.5.5 0 0 1-.708-.708L10.293 9H6a.5.5 0 0 1 0-1h4.293L8.646 6.354a.5.5 0 0 1 0-.708zm-1.292 0a.5.5 0 0 0-.708 0l-2 2a.5.5 0 0 0 0 .708l2 2a.5.5 0 0 0 .708-.708L5.707 9H10a.5.5 0 0 0 0-1H5.707l1.647-1.646z"/>
+                    </svg>
+                    JSON
+                </button>
+                <button class="copy-button" id="copyButton" 
+                        aria-label="Copy filtered results to clipboard"
+                        tabindex="0">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+                        <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z"/>
+                        <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                    </svg>
+                    Copy
+                </button>
+            </div>
             <!-- Log entries will be displayed here -->
-            <button class="copy-button" id="copyButton" title="Copy filtered results" 
-                    aria-label="Copy filtered log entries to clipboard" tabindex="0">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6z"/>
-                    <path d="M2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1H2V5z"/>
-                </svg>
-            </button>
         </div>
-        
-        <!-- Toast notification -->
-        <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1050;">
-            <div id="copyToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
-                <div class="toast-header">
-                    <strong class="me-auto">Success</strong>
-                    <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-                </div>
-                <div class="toast-body">
-                    Copied filtered results
-                </div>
-            </div>
+    </div>
+    
+    <!-- Toast container for notifications -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
+        <!-- Toasts will be dynamically added here -->
+    </div>
+    
+    <!-- Copy success toast -->
+    <div class="toast" id="copyToast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <strong class="me-auto text-success">Success</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
-        
-        <footer class="mt-5 pt-4 border-top border-secondary">
-            <div class="text-center">
-                <img src="{{ url_for('static', filename='MayorAwesome.png') }}" alt="Mayor Awesome" style="width: 35px; height: 35px; margin-right: 10px; vertical-align: middle;">
-                <span>Vibe-coded by <a href="https://linktr.ee/mayorawesome" target="_blank" class="text-decoration-none">Mayor Awesome</a></span>
-            </div>
-        </footer>
+        <div class="toast-body">
+            Copied to clipboard!
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/state.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/api.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="/static/js/state.js?v=1.3"></script>
+    <script src="/static/js/utils.js?v=1.3"></script>
+    <script src="/static/js/ui.js?v=1.3"></script>
+    <script src="/static/js/api.js?v=1.3"></script>
+    <script src="/static/js/app.js?v=1.3"></script>
 </body>
 </html> 

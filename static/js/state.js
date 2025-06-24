@@ -8,11 +8,40 @@ class AppState {
             filters: {
                 levels: ['Display', 'Warning', 'Error'],
                 types: [],
-                search: ''
+                search: '',
+                caseSensitive: false,
+                useRegex: false
+            },
+            searchHistory: [],
+            ui: {
+                dragOver: false,
+                searchDropdownOpen: false
             }
         };
         this.listeners = [];
         this.subscriptionsPaused = false;
+        this.loadFromLocalStorage();
+    }
+
+    // Load state from localStorage
+    loadFromLocalStorage() {
+        try {
+            const savedHistory = localStorage.getItem('logAnalyzer_searchHistory');
+            if (savedHistory) {
+                this.state.searchHistory = JSON.parse(savedHistory);
+            }
+        } catch (error) {
+            console.warn('Failed to load search history:', error);
+        }
+    }
+
+    // Save state to localStorage
+    saveToLocalStorage() {
+        try {
+            localStorage.setItem('logAnalyzer_searchHistory', JSON.stringify(this.state.searchHistory));
+        } catch (error) {
+            console.warn('Failed to save search history:', error);
+        }
     }
 
     // Get current state
@@ -29,6 +58,29 @@ class AppState {
     // Update specific part of state
     updateFilters(filters) {
         this.state.filters = { ...this.state.filters, ...filters };
+        this.notifyListeners();
+    }
+
+    // Add search term to history
+    addToSearchHistory(term) {
+        if (!term || term.trim() === '') return;
+        
+        const trimmedTerm = term.trim();
+        // Remove if already exists
+        this.state.searchHistory = this.state.searchHistory.filter(item => item !== trimmedTerm);
+        // Add to beginning
+        this.state.searchHistory.unshift(trimmedTerm);
+        // Keep only last 10 searches
+        this.state.searchHistory = this.state.searchHistory.slice(0, 10);
+        
+        this.saveToLocalStorage();
+        this.notifyListeners();
+    }
+
+    // Clear search history
+    clearSearchHistory() {
+        this.state.searchHistory = [];
+        this.saveToLocalStorage();
         this.notifyListeners();
     }
 
@@ -88,8 +140,32 @@ class AppState {
             }
 
             // Filter by search term
-            if (filters.search && !entry.content.toLowerCase().includes(filters.search.toLowerCase())) {
-                return false;
+            if (filters.search) {
+                const searchTerm = filters.search;
+                const content = entry.content;
+                
+                if (filters.useRegex) {
+                    try {
+                        const flags = filters.caseSensitive ? 'g' : 'gi';
+                        const regex = new RegExp(searchTerm, flags);
+                        if (!regex.test(content)) {
+                            return false;
+                        }
+                    } catch (error) {
+                        // Invalid regex, fall back to simple search
+                        const searchContent = filters.caseSensitive ? content : content.toLowerCase();
+                        const searchLower = filters.caseSensitive ? searchTerm : searchTerm.toLowerCase();
+                        if (!searchContent.includes(searchLower)) {
+                            return false;
+                        }
+                    }
+                } else {
+                    const searchContent = filters.caseSensitive ? content : content.toLowerCase();
+                    const searchLower = filters.caseSensitive ? searchTerm : searchTerm.toLowerCase();
+                    if (!searchContent.includes(searchLower)) {
+                        return false;
+                    }
+                }
             }
 
             return true;
