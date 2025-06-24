@@ -148,40 +148,62 @@
         </h1>
         
         <div class="upload-container">
-            <form id="uploadForm" class="mb-3">
+            <form id="uploadForm" class="mb-3" role="form" aria-label="Log file upload form">
                 <div class="mb-3">
                     <label for="logFile" class="form-label">Upload Log File</label>
-                    <input type="file" class="form-control" id="logFile" accept=".log,.txt">
+                    <input type="file" class="form-control" id="logFile" accept=".log,.txt" 
+                           aria-describedby="fileHelp" tabindex="0">
+                    <div id="fileHelp" class="form-text">Select a .log or .txt file to analyze</div>
                 </div>
-                <button type="submit" class="btn btn-primary" id="uploadButton">Refresh</button>
+                <button type="submit" class="btn btn-primary" id="uploadButton" 
+                        aria-label="Upload and analyze log file">Refresh</button>
             </form>
         </div>
 
-        <div class="filters-container">
+        <div class="filters-container" role="region" aria-label="Log filters">
             <h5>
-                <a class="text-decoration-none" data-bs-toggle="collapse" href="#logTypeFiltersCollapse" role="button" aria-expanded="true" aria-controls="logTypeFiltersCollapse">
+                <a class="text-decoration-none" data-bs-toggle="collapse" href="#logTypeFiltersCollapse" 
+                   role="button" aria-expanded="true" aria-controls="logTypeFiltersCollapse"
+                   tabindex="0">
                     Filter Log Types
                     <span class="ms-2"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-down" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg></span>
                 </a>
             </h5>
             <div class="mb-3">
-                <input type="text" class="form-control" id="logSearchInput" placeholder="Search log content...">
+                <label for="logSearchInput" class="visually-hidden">Search log content</label>
+                <input type="text" class="form-control" id="logSearchInput" 
+                       placeholder="Search log content..." 
+                       aria-label="Search log entries"
+                       tabindex="0">
             </div>
             <div class="collapse show" id="logTypeFiltersCollapse">
-                <div class="mb-3" id="logLevelFilters">
-                    <label class="form-check-label me-3"><input class="form-check-input me-1 log-level-filter" type="checkbox" value="Display" checked>Display <span class="badge bg-secondary" id="count-Display">0</span></label>
-                    <label class="form-check-label me-3"><input class="form-check-input me-1 log-level-filter" type="checkbox" value="Warning" checked>Warning <span class="badge bg-secondary" id="count-Warning">0</span></label>
-                    <label class="form-check-label me-3"><input class="form-check-input me-1 log-level-filter" type="checkbox" value="Error" checked>Error <span class="badge bg-secondary" id="count-Error">0</span></label>
+                <div class="mb-3" id="logLevelFilters" role="group" aria-label="Log level filters">
+                    <label class="form-check-label me-3">
+                        <input class="form-check-input me-1 log-level-filter" type="checkbox" value="Display" checked 
+                               aria-label="Filter Display level logs">
+                        Display <span class="badge bg-secondary" id="count-Display">0</span>
+                    </label>
+                    <label class="form-check-label me-3">
+                        <input class="form-check-input me-1 log-level-filter" type="checkbox" value="Warning" checked 
+                               aria-label="Filter Warning level logs">
+                        Warning <span class="badge bg-secondary" id="count-Warning">0</span>
+                    </label>
+                    <label class="form-check-label me-3">
+                        <input class="form-check-input me-1 log-level-filter" type="checkbox" value="Error" checked 
+                               aria-label="Filter Error level logs">
+                        Error <span class="badge bg-secondary" id="count-Error">0</span>
+                    </label>
                 </div>
-                <div id="logTypeFilters" class="row">
+                <div id="logTypeFilters" class="row" role="group" aria-label="Log type filters">
                     <!-- Log type checkboxes will be added here dynamically -->
                 </div>
             </div>
         </div>
 
-        <div class="log-container" id="logContent">
+        <div class="log-container" id="logContent" role="log" aria-label="Log entries display" tabindex="0">
             <!-- Log entries will be displayed here -->
-            <button class="copy-button" id="copyButton" title="Copy filtered results">
+            <button class="copy-button" id="copyButton" title="Copy filtered results" 
+                    aria-label="Copy filtered log entries to clipboard" tabindex="0">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                     <path d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6z"/>
                     <path d="M2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1H2V5z"/>
@@ -211,254 +233,10 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        let currentFilename = null;
-        let allLogEntries = [];
-
-        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const fileInput = document.getElementById('logFile');
-            const file = fileInput.files[0];
-            const uploadButton = document.getElementById('uploadButton');
-            
-            if (!file) {
-                alert('Please select a file');
-                return;
-            }
-
-            // Show loading state
-            uploadButton.textContent = 'Loading...';
-            uploadButton.disabled = true;
-
-            const formData = new FormData();
-            formData.append('file', file);
-
-            try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                if (response.ok) {
-                    currentFilename = file.name;
-                    allLogEntries = data.entries;
-                    window.currentLogTypes = data.log_types;
-                    displayLogEntries(data.entries);
-                    createLogTypeFilters(data.log_types);
-                    // Update log type counts for initial load
-                    updateLogTypeCountsForLevels(data.entries, data.log_types);
-                } else {
-                    alert(data.error || 'Error uploading file');
-                }
-            } catch (error) {
-                alert('Error uploading file');
-                console.error(error);
-            } finally {
-                // Reset button state
-                uploadButton.textContent = 'Refresh';
-                uploadButton.disabled = false;
-            }
-        });
-
-        document.getElementById('logFile').addEventListener('change', function() {
-            if (this.files.length > 0) {
-                document.getElementById('uploadForm').requestSubmit();
-            }
-        });
-
-        function createLogTypeFilters(logTypes) {
-            const container = document.getElementById('logTypeFilters');
-            container.innerHTML = '';
-            
-            logTypes.forEach(typeObj => {
-                const type = typeObj.type;
-                const count = typeObj.count;
-                const col = document.createElement('div');
-                col.className = 'col-md-3 mb-2';
-                
-                const checkbox = document.createElement('div');
-                checkbox.className = 'form-check';
-                checkbox.innerHTML = `
-                    <input class="form-check-input" type="checkbox" value="${type}" id="filter_${type}">
-                    <label class="form-check-label" for="filter_${type}">
-                        ${type} <span class="badge bg-secondary" id="badge-type-${type}">${count}</span>
-                    </label>
-                `;
-                
-                checkbox.querySelector('input').addEventListener('change', filterLogs);
-                col.appendChild(checkbox);
-                container.appendChild(col);
-            });
-        }
-
-        function updateLogTypeCountsForLevels(entries, logTypes) {
-            // Count only entries matching the current log level filter and search term
-            const selectedLevels = getSelectedLogLevels();
-            const searchTerm = getSearchTerm();
-            const counts = {};
-            logTypes.forEach(typeObj => counts[typeObj.type] = 0);
-            entries.forEach(entry => {
-                let level = '';
-                if (/\bWarning\b/i.test(entry.content)) level = 'Warning';
-                else if (/\bError\b/i.test(entry.content)) level = 'Error';
-                else if (/\bDisplay\b/i.test(entry.content)) level = 'Display';
-                if (selectedLevels.length && !selectedLevels.includes(level)) return;
-                // Filter by search term (content only)
-                if (searchTerm && !entry.content.toLowerCase().includes(searchTerm)) return;
-                if (counts.hasOwnProperty(entry.type)) counts[entry.type]++;
-            });
-            logTypes.forEach(typeObj => {
-                const badge = document.getElementById(`badge-type-${typeObj.type}`);
-                if (badge) badge.textContent = counts[typeObj.type];
-            });
-        }
-
-        function updateAllLogTypeCounts() {
-            if (window.currentLogTypes && allLogEntries) {
-                updateLogTypeCountsForLevels(allLogEntries, window.currentLogTypes);
-            }
-        }
-
-        async function filterLogs() {
-            if (!currentFilename) return;
-
-            const selectedTypes = Array.from(document.querySelectorAll('#logTypeFilters input:checked'))
-                .map(checkbox => checkbox.value);
-
-            try {
-                const response = await fetch('/filter', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        filename: currentFilename,
-                        types: selectedTypes
-                    })
-                });
-
-                const data = await response.json();
-                if (response.ok) {
-                    displayLogEntries(data.entries);
-                    // Do NOT update log type counts here
-                } else {
-                    alert(data.error || 'Error filtering logs');
-                }
-            } catch (error) {
-                alert('Error filtering logs');
-                console.error(error);
-            }
-        }
-
-        function getSelectedLogLevels() {
-            return Array.from(document.querySelectorAll('.log-level-filter:checked')).map(cb => cb.value);
-        }
-
-        function updateLogLevelCounts(entries) {
-            const counts = { Display: 0, Warning: 0, Error: 0 };
-            entries.forEach(entry => {
-                if (/\bWarning\b/i.test(entry.content)) counts.Warning++;
-                else if (/\bError\b/i.test(entry.content)) counts.Error++;
-                else if (/\bDisplay\b/i.test(entry.content)) counts.Display++;
-            });
-            document.getElementById('count-Display').textContent = counts.Display;
-            document.getElementById('count-Warning').textContent = counts.Warning;
-            document.getElementById('count-Error').textContent = counts.Error;
-        }
-
-        function getSearchTerm() {
-            return document.getElementById('logSearchInput').value.trim().toLowerCase();
-        }
-
-        function displayLogEntries(entries) {
-            const container = document.getElementById('logContent');
-            container.innerHTML = '';
-            const selectedLevels = getSelectedLogLevels();
-            const selectedTypes = Array.from(document.querySelectorAll('#logTypeFilters input:checked')).map(cb => cb.value);
-            const searchTerm = getSearchTerm();
-            
-            // Update log level counts for the current filtered log types
-            let filteredForLevelCount = entries.filter(entry => !selectedTypes.length || selectedTypes.includes(entry.type));
-            updateLogLevelCounts(filteredForLevelCount);
-            // Do NOT update log type counts here
-
-            entries.forEach(entry => {
-                // Filter by log type
-                if (selectedTypes.length && !selectedTypes.includes(entry.type)) return;
-                // Filter by log level
-                let level = '';
-                if (/\bWarning\b/i.test(entry.content)) level = 'Warning';
-                else if (/\bError\b/i.test(entry.content)) level = 'Error';
-                else if (/\bDisplay\b/i.test(entry.content)) level = 'Display';
-                if (selectedLevels.length && !selectedLevels.includes(level)) return;
-                // Filter by search term (content only)
-                if (searchTerm && !entry.content.toLowerCase().includes(searchTerm)) return;
-
-                const div = document.createElement('div');
-                div.className = 'log-entry';
-                let levelClass = '';
-                if (level === 'Warning') levelClass = 'log-level-warning';
-                else if (level === 'Error') levelClass = 'log-level-error';
-                else if (level === 'Display') levelClass = 'log-level-display';
-                div.innerHTML = `<span class="log-type">${entry.type}</span> <span class="${levelClass}">${entry.content}</span>`;
-                container.appendChild(div);
-            });
-        }
-
-        // Add event listeners for log level filters
-        document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('.log-level-filter').forEach(cb => {
-                cb.addEventListener('change', () => {
-                    updateAllLogTypeCounts();
-                    displayLogEntries(allLogEntries);
-                });
-            });
-            // Add event listener for search input
-            document.getElementById('logSearchInput').addEventListener('input', function() {
-                updateAllLogTypeCounts();
-                displayLogEntries(allLogEntries);
-            });
-            
-            // Initialize copy button functionality
-            document.getElementById('copyButton').addEventListener('click', copyFilteredResults);
-        });
-
-        // Copy filtered results to clipboard
-        async function copyFilteredResults() {
-            const logContainer = document.getElementById('logContent');
-            const logEntries = logContainer.querySelectorAll('.log-entry');
-            
-            if (logEntries.length === 0) {
-                alert('No filtered results to copy');
-                return;
-            }
-            
-            let textToCopy = '';
-            logEntries.forEach(entry => {
-                textToCopy += entry.textContent + '\n';
-            });
-            
-            try {
-                await navigator.clipboard.writeText(textToCopy);
-                showCopyToast();
-            } catch (err) {
-                // Fallback for older browsers
-                const textArea = document.createElement('textarea');
-                textArea.value = textToCopy;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-                showCopyToast();
-            }
-        }
-
-        // Show copy success toast
-        function showCopyToast() {
-            const toast = new bootstrap.Toast(document.getElementById('copyToast'));
-            toast.show();
-        }
-    </script>
+    <script src="{{ url_for('static', filename='js/state.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html> 
