@@ -24,6 +24,7 @@
             overflow-y: auto;
             margin-top: 20px;
             border: 1px solid #333;
+            position: relative;
         }
         .log-entry {
             margin: 2px 0;
@@ -106,6 +107,38 @@
         .log-level-error {
             color: #ef9a9a;
         }
+        .copy-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #007bff;
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 10;
+            transition: background-color 0.2s;
+        }
+        .copy-button:hover {
+            background-color: #0056b3;
+        }
+        .copy-button:active {
+            background-color: #004085;
+        }
+        .toast {
+            background-color: #23272b;
+            color: #e0e0e0;
+            border: 1px solid #333;
+        }
+        .toast-header {
+            background-color: #2d3136;
+            color: #e0e0e0;
+            border-bottom: 1px solid #333;
+        }
+        .btn-close {
+            filter: invert(1);
+        }
     </style>
 </head>
 <body>
@@ -148,6 +181,25 @@
 
         <div class="log-container" id="logContent">
             <!-- Log entries will be displayed here -->
+            <button class="copy-button" id="copyButton" title="Copy filtered results">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6z"/>
+                    <path d="M2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1H2V5z"/>
+                </svg>
+            </button>
+        </div>
+        
+        <!-- Toast notification -->
+        <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1050;">
+            <div id="copyToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="toast-header">
+                    <strong class="me-auto">Success</strong>
+                    <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+                <div class="toast-body">
+                    Copied filtered results
+                </div>
+            </div>
         </div>
         
         <footer class="mt-5 pt-4 border-top border-secondary">
@@ -158,6 +210,7 @@
         </footer>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let currentFilename = null;
         let allLogEntries = [];
@@ -366,7 +419,46 @@
                 updateAllLogTypeCounts();
                 displayLogEntries(allLogEntries);
             });
+            
+            // Initialize copy button functionality
+            document.getElementById('copyButton').addEventListener('click', copyFilteredResults);
         });
+
+        // Copy filtered results to clipboard
+        async function copyFilteredResults() {
+            const logContainer = document.getElementById('logContent');
+            const logEntries = logContainer.querySelectorAll('.log-entry');
+            
+            if (logEntries.length === 0) {
+                alert('No filtered results to copy');
+                return;
+            }
+            
+            let textToCopy = '';
+            logEntries.forEach(entry => {
+                textToCopy += entry.textContent + '\n';
+            });
+            
+            try {
+                await navigator.clipboard.writeText(textToCopy);
+                showCopyToast();
+            } catch (err) {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = textToCopy;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                showCopyToast();
+            }
+        }
+
+        // Show copy success toast
+        function showCopyToast() {
+            const toast = new bootstrap.Toast(document.getElementById('copyToast'));
+            toast.show();
+        }
     </script>
 </body>
 </html> 
