@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 import os
 from werkzeug.utils import secure_filename
+import re
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -8,45 +9,6 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
-# Official Unreal Engine log categories (from https://planeshift.top-ix.org/pswiki/index.php/List_of_all_Unreal_Engine_Log_categories)
-UE_LOG_CATEGORIES = set([
-    'LogPath', 'LogController', 'LogPhysics', 'LogBlueprint', 'LogBlueprintUserMessages',
-    'LogAnimation', 'LogRootMotion', 'LogLevel', 'LogSkeletalMesh', 'LogStaticMesh',
-    'LogNet', 'LogRep', 'LogNetPlayerMovement', 'LogNetTraffic', 'LogRepTraffic',
-    'LogNetFastTArray', 'LogNetDormancy', 'LogSkeletalControl', 'LogSubtitle', 'LogTexture',
-    'LogPlayerManagement', 'LogSecurity', 'LogEngineSessionManager', 'LogHAL', 'LogSerialization',
-    'LogUnrealMath', 'LogUnrealMatrix', 'LogContentComparisonCommandlet', 'LogNetPackageMap',
-    'LogNetSerialization', 'LogMemory', 'LogProfilingDebugging', 'LogCore', 'LogOutputDevice',
-    'LogSHA', 'LogStats', 'LogStreaming', 'LogInit', 'LogExit', 'LogExec', 'LogScript',
-    'LogLocalization', 'LogLongPackageNames', 'LogProcess', 'LogLoad', 'LogTemp',
-    'LogAITestSuite', 'LogBehaviorTreeTest', 'LogAssetTools', 'LogAutomationDriver',
-    'LogBlueprintCodeGen', 'LogCollectionManager', 'LogCollisionAnalyzer', 'LogCrashDebugHelper',
-    'LogDatasmith', 'LogDerivedDataCache', 'LogDesktopPlatform', 'LogDirectoryWatcher',
-    'LogZipArchiveWriter', 'LogFunctionalTest', 'LogGameplayDebug', 'LogHotReload',
-    'LogLocalizationService', 'LogMeshDescriptionBuildStatistic', 'LogMeshBuilder',
-    'LogMeshDescriptionHelper', 'LogXmpp', 'LogEGL', 'LogOpenGL', 'LogOverlay',
-    'PacketHandlerLog', 'LogPakFile', 'LogPerfCounters', 'LogPhysicsCore', 'LogLauncherCheck',
-    'LogLauncherPlatform', 'LogRendererCore', 'LogShaderLibrary', 'LogShaders', 'LogDistanceField',
-    'LogRenderer', 'LogRHI', 'LogRigVM', 'RuntimeAssetCache', 'SandboxFile', 'LogSignalProcessing',
-    'LogSlate', 'LogSlateStyles', 'LogSlateStyle', 'LogMultichannelTCP', 'LogSockets',
-    'LogStreamingPlatformFile', 'LogUMG', 'LogUnrealAudio', 'LogUnrealAudioDevice',
-    'LogVulkanRHI', 'LogVulkan', 'LogWebBrowser', 'LogD3D11RHI', 'HighlightRecorder',
-    'WindowsVideoRecordingSystem', 'MP4', 'WMF', 'WmfRingBuffer', 'LogXAudio2',
-    # Additional common categories from the wiki and real logs:
-    'LogMaterial', 'LogUObjectGlobals', 'LogLinker', 'LogCook', 'LogAssetRegistry',
-    'LogEditor', 'LogWorld', 'LogRender', 'LogAudio', 'LogInput', 'LogShaderCompilers',
-    'LogEditorServer', 'LogEngine', 'LogWorldPartition', 'LogWorldPartitionStreaming',
-    'LogWorldPartitionActorDesc', 'LogWorldPartitionHLOD', 'LogWorldPartitionStreamingGeneration',
-    'LogWorldPartitionStreamingSource', 'LogWorldPartitionStreamingPolicy', 'LogWorldPartitionStreamingCells',
-    'LogWorldPartitionStreamingGrid', 'LogWorldPartitionStreamingLayers', 'LogWorldPartitionStreamingManager',
-    'LogWorldPartitionStreamingSourceManager', 'LogWorldPartitionStreamingVolume',
-    'LogWorldPartitionStreamingVolumeManager', 'LogWorldPartitionStreamingVolumePolicy',
-    'LogWorldPartitionStreamingVolumeSource', 'LogWorldPartitionStreamingVolumeSourceManager',
-    'LogWorldPartitionStreamingVolumePolicyManager', 'LogWorldPartitionStreamingVolumePolicySource',
-    'LogWorldPartitionStreamingVolumePolicySourceManager', 'LogWorldPartitionStreamingVolumePolicyManagerSource',
-    'LogWorldPartitionStreamingVolumePolicyManagerSourceManager'
-])
 
 @app.route('/')
 def index():
@@ -74,11 +36,13 @@ def upload_file():
             for line in f:
                 if line.strip() and ':' in line:
                     log_type = line.split(':', 1)[0].strip()
-                    if log_type in UE_LOG_CATEGORIES:
-                        log_type_counts[log_type] = log_type_counts.get(log_type, 0) + 1
+                    log_category = re.search("(Log.*)", log_type)   
+                    if log_category:
+                        log_category_str = log_category.group()
+                        log_type_counts[log_category_str] = log_type_counts.get(log_category_str, 0) + 1
                         log_entries.append({
-                            'type': log_type,
-                            'content': line[len(log_type)+1:].strip()
+                            'type': log_category_str,
+                            'content': line[len(log_category_str)+1:].strip()
                         })
         log_types = [ {'type': t, 'count': log_type_counts[t]} for t in sorted(log_type_counts.keys()) ]
         return jsonify({
