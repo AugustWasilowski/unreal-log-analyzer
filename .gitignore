@@ -11,3 +11,10 @@
 !static/**
 !templates/
 !templates/**
+!Dockerfile
+!Dockerfile.dev
+!docker-compose.yml
+!docker-compose.prod.yml
+!.dockerignore
+!docker-scripts.sh
+!docker-scripts.ps1

@@ -61,6 +61,17 @@ The application uses a modular JavaScript architecture with separated concerns:
 
 ## Installation
 
+### Option 1: Docker (Recommended)
+
+1. Clone the repository
+2. Build and run with Docker Compose:
+   ```bash
+   docker-compose up --build
+   ```
+3. Open http://localhost:5000 in your browser
+
+### Option 2: Local Python Installation
+
 1. Clone the repository
 2. Install Python dependencies: `pip install -r requirements.txt`
 3. Run the application: `python app.py`
@@ -117,7 +128,99 @@ This project is open source and available under the MIT License.
 
 **Vibe-coded by [Mayor Awesome](https://linktr.ee/mayorawesome)**
 
-## Local Development
+## Docker Development
+
+### Production Build
+```bash
+# Build and run production container
+docker-compose up --build
+
+# Run in background
+docker-compose up -d --build
+
+# View logs
+docker-compose logs -f
+
+# Stop the application
+docker-compose down
+```
+
+### Development Build (with hot reload)
+```bash
+# Run development container with hot reload
+docker-compose --profile dev up --build log-analyzer-dev
+
+# Access development server at http://localhost:5001
+```
+
+### Docker Commands
+```bash
+# Build image only
+docker build -t log-analyzer .
+
+# Run container directly
+docker run -p 5000:5000 log-analyzer
+
+# Run with volume for persistent uploads
+docker run -p 5000:5000 -v uploads_data:/app/uploads log-analyzer
+```
+
+### Helper Scripts
+
+For convenience, use the provided helper scripts:
+
+**Linux/macOS:**
+```bash
+# Make script executable
+chmod +x docker-scripts.sh
+
+# Build production image
+./docker-scripts.sh build
+
+# Start development environment
+./docker-scripts.sh dev
+
+# Start production environment
+./docker-scripts.sh prod
+
+# Stop all containers
+./docker-scripts.sh stop
+
+# Clean up Docker resources
+./docker-scripts.sh clean
+
+# View logs
+./docker-scripts.sh logs
+
+# Open shell in container
+./docker-scripts.sh shell
+```
+
+**Windows PowerShell:**
+```powershell
+# Build production image
+.\docker-scripts.ps1 build
+
+# Start development environment
+.\docker-scripts.ps1 dev
+
+# Start production environment
+.\docker-scripts.ps1 prod
+
+# Stop all containers
+.\docker-scripts.ps1 stop
+
+# Clean up Docker resources
+.\docker-scripts.ps1 clean
+
+# View logs
+.\docker-scripts.ps1 logs
+
+# Open shell in container
+.\docker-scripts.ps1 shell
+```
+
+## Local Development (without Docker)
 
 1. Install dependencies:
 ```bash
@@ -130,6 +233,60 @@ python app.py
 ```
 
 3. Open http://localhost:5000 in your browser
+
+## Docker Deployment
+
+### Docker Hub Deployment
+
+1. Build and tag your image:
+   ```bash
+   docker build -t yourusername/log-analyzer:latest .
+   ```
+
+2. Push to Docker Hub:
+   ```bash
+   docker push yourusername/log-analyzer:latest
+   ```
+
+3. Deploy on any Docker-compatible platform:
+   ```bash
+   docker run -d -p 5000:5000 --name log-analyzer yourusername/log-analyzer:latest
+   ```
+
+### Cloud Platform Deployment
+
+#### AWS ECS/Fargate
+- Use the provided Dockerfile
+- Configure ECS task definition with port 5000
+- Set environment variables as needed
+
+#### Google Cloud Run
+- Use the provided Dockerfile
+- Deploy with: `gcloud run deploy --source .`
+- Automatically scales to zero when not in use
+
+#### Azure Container Instances
+- Use the provided Dockerfile
+- Deploy with Azure CLI or portal
+
+### Docker Compose Production
+
+For production deployment with Docker Compose:
+
+```yaml
+# docker-compose.prod.yml
+version: '3.8'
+services:
+  log-analyzer:
+    image: yourusername/log-analyzer:latest
+    ports:
+      - "80:5000"
+    environment:
+      - FLASK_ENV=production
+    volumes:
+      - uploads_data:/app/uploads
+    restart: unless-stopped
+```
 
 ## Railway Deployment
 
@@ -185,10 +342,18 @@ Note: Railway uses ephemeral storage, so uploaded files will be lost when the ap
 log_analyzer/
 ├── app.py              # Main Flask application
 ├── requirements.txt    # Python dependencies
+├── Dockerfile          # Production Docker configuration
+├── Dockerfile.dev      # Development Docker configuration
+├── docker-compose.yml  # Docker Compose configuration
+├── docker-compose.prod.yml # Production Docker Compose configuration
+├── .dockerignore       # Docker build context exclusions
+├── docker-scripts.sh   # Linux/macOS helper scripts
+├── docker-scripts.ps1  # Windows PowerShell helper scripts
 ├── Procfile           # Railway deployment configuration
 ├── runtime.txt        # Python version specification
 ├── templates/
 │   └── index.html     # Main web interface
+├── static/            # Static assets (CSS, JS, images)
 ├── uploads/           # Temporary file upload directory
 └── README.md          # This file
 ```
