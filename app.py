@@ -52,6 +52,10 @@ UE_LOG_CATEGORIES = set([
 def index():
     return render_template('index.html')
 
+@app.route('/health')
+def health():
+    return jsonify({'status': 'healthy', 'message': 'Unreal Engine Log Analyzer is running'}), 200
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
