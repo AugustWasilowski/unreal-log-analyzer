@@ -45,7 +45,11 @@ UE_LOG_CATEGORIES = set([
     'LogWorldPartitionStreamingVolumeSource', 'LogWorldPartitionStreamingVolumeSourceManager',
     'LogWorldPartitionStreamingVolumePolicyManager', 'LogWorldPartitionStreamingVolumePolicySource',
     'LogWorldPartitionStreamingVolumePolicySourceManager', 'LogWorldPartitionStreamingVolumePolicyManagerSource',
-    'LogWorldPartitionStreamingVolumePolicyManagerSourceManager'
+    'LogWorldPartitionStreamingVolumePolicyManagerSourceManager',
+    # Additional categories found in editor logs:
+    'LogAssetRegistry', 'LogConfig', 'LogConsoleManager', 'LogCsvProfiler', 'LogD3D12RHI',
+    'LogDLSSBlueprint', 'LogDLSSNGXVulkanRHIPreInit', 'LogDevObjectVersion', 'LogICUInternationalization',
+    'LogOnline', 'LogPackageName', 'LogPluginManager', 'LogStreamlineShaders', 'LogVoxel'
 ])
 
 @app.route('/')
