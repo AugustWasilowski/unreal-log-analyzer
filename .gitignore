@@ -6,6 +6,7 @@
 !Procfile
 !requirements.txt
 !README.md
+!LICENSE.MD
 !.gitignore
 !static/
 !static/**
