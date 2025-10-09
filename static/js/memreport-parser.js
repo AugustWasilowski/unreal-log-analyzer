@@ -3,18 +3,20 @@
  * Handles section detection, table parsing, and key-value extraction
  */
 class MemReportParser {
-    // Section detection patterns
+    // Section detection patterns for modern memreport format
     static SECTION_PATTERNS = {
-        overview: /^=+\s*(Memory Overview|Platform Memory|Memory Summary)\s*=+$/i,
-        obj_list: /^=+\s*Obj List.*=+$/i,
-        rhi_memory: /^=+\s*(RHI|Rendering).*Memory.*=+$/i,
-        streaming_levels: /^=+\s*Streaming Levels.*=+$/i,
-        actors: /^=+\s*Actors.*=+$/i,
-        textures: /^=+\s*(ListTextures|Texture).*=+$/i,
-        static_meshes: /^=+\s*(ListStaticMeshes|Static.*Mesh).*=+$/i,
-        audio: /^=+\s*(Audio|Sound).*=+$/i,
-        animation: /^=+\s*(Animation|Anim).*=+$/i,
-        particles: /^=+\s*(Particle|FX).*=+$/i
+        memory_stats: /^(Platform Memory Stats|Memory Stats|Allocator Stats)/i,
+        obj_list: /^Obj List:/i,
+        rhi_memory: /^(RHI resource memory|Tracked RHIResources)/i,
+        rhi_dump: /^rhi\.DumpMemory|rhi\.DumpResourceMemory/i,
+        skeletal_meshes: /^Obj List:.*SkeletalMesh/i,
+        static_meshes: /^Obj List:.*StaticMesh/i,
+        textures_nonvt: /^Listing NONVT textures/i,
+        textures_uncompressed: /^Listing uncompressed textures/i,
+        levels: /^Levels:/i,
+        actors: /^Listing spawned actors/i,
+        render_targets: /^Pooled Render Targets:/i,
+        deferred_targets: /^Deferred Render Targets:/i
     };
 
     /**
@@ -252,6 +254,8 @@ class MemReportParser {
     static async detectSectionsChunked(lines, chunkSize, progressCallback) {
         const sections = [];
         let currentSection = null;
+        let inMemReportCommand = false;
+        let pendingCommandTitle = null;
         let processedLines = 0;
         const totalLines = lines.length;
 
@@ -263,21 +267,64 @@ class MemReportParser {
                 const line = chunk[j];
                 const globalIndex = i + j;
                 
-                if (this.isSectionHeader(line)) {
+                // Handle MemReport command structure
+                if (/^MemReport: Begin command/.test(line)) {
                     // Save previous section if exists
                     if (currentSection && currentSection.lines.length > 0) {
                         sections.push(currentSection);
                     }
                     
-                    // Start new section
+                    // Extract command title but don't create section yet
+                    pendingCommandTitle = this.extractSectionTitle(line);
+                    inMemReportCommand = true;
+                    currentSection = null;
+                    continue;
+                }
+                
+                if (/^MemReport: End command/.test(line)) {
+                    // End current section
+                    if (currentSection && currentSection.lines.length > 0) {
+                        sections.push(currentSection);
+                    }
+                    inMemReportCommand = false;
+                    pendingCommandTitle = null;
+                    currentSection = null;
+                    continue;
+                }
+                
+                // Handle direct section headers
+                if (this.isSectionHeader(line) && !line.startsWith('MemReport:')) {
+                    // Save previous section if exists
+                    if (currentSection && currentSection.lines.length > 0) {
+                        sections.push(currentSection);
+                    }
+                    
+                    // Start new section with this line as title
                     currentSection = {
                         title: this.extractSectionTitle(line),
                         lines: [],
-                        startLine: globalIndex
+                        startLine: globalIndex,
+                        commandTitle: pendingCommandTitle
                     };
-                } else if (currentSection && line.length > 0) {
-                    // Add non-empty lines to current section
-                    currentSection.lines.push(line);
+                    continue;
+                }
+                
+                // Handle content lines
+                if (line.length > 0) {
+                    // If we're in a MemReport command but haven't found a section header yet,
+                    // create a section with the command title
+                    if (inMemReportCommand && !currentSection && pendingCommandTitle) {
+                        currentSection = {
+                            title: pendingCommandTitle,
+                            lines: [],
+                            startLine: globalIndex
+                        };
+                    }
+                    
+                    // Add line to current section
+                    if (currentSection) {
+                        currentSection.lines.push(line);
+                    }
                 }
             }
 
@@ -338,25 +385,70 @@ class MemReportParser {
     static detectSections(lines) {
         const sections = [];
         let currentSection = null;
+        let inMemReportCommand = false;
+        let pendingCommandTitle = null;
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             
-            if (this.isSectionHeader(line)) {
+            // Handle MemReport command structure
+            if (/^MemReport: Begin command/.test(line)) {
                 // Save previous section if exists
                 if (currentSection && currentSection.lines.length > 0) {
                     sections.push(currentSection);
                 }
                 
-                // Start new section
+                // Extract command title but don't create section yet
+                pendingCommandTitle = this.extractSectionTitle(line);
+                inMemReportCommand = true;
+                currentSection = null;
+                continue;
+            }
+            
+            if (/^MemReport: End command/.test(line)) {
+                // End current section
+                if (currentSection && currentSection.lines.length > 0) {
+                    sections.push(currentSection);
+                }
+                inMemReportCommand = false;
+                pendingCommandTitle = null;
+                currentSection = null;
+                continue;
+            }
+            
+            // Handle direct section headers (like "Obj List:", "Platform Memory Stats", etc.)
+            if (this.isSectionHeader(line) && !line.startsWith('MemReport:')) {
+                // Save previous section if exists
+                if (currentSection && currentSection.lines.length > 0) {
+                    sections.push(currentSection);
+                }
+                
+                // Start new section with this line as title
                 currentSection = {
                     title: this.extractSectionTitle(line),
                     lines: [],
-                    startLine: i
+                    startLine: i,
+                    commandTitle: pendingCommandTitle // Keep reference to parent command
                 };
-            } else if (currentSection && line.length > 0) {
-                // Add non-empty lines to current section
-                currentSection.lines.push(line);
+                continue;
+            }
+            
+            // Handle content lines
+            if (line.length > 0) {
+                // If we're in a MemReport command but haven't found a section header yet,
+                // create a section with the command title
+                if (inMemReportCommand && !currentSection && pendingCommandTitle) {
+                    currentSection = {
+                        title: pendingCommandTitle,
+                        lines: [],
+                        startLine: i
+                    };
+                }
+                
+                // Add line to current section
+                if (currentSection) {
+                    currentSection.lines.push(line);
+                }
             }
         }
 
@@ -374,7 +466,35 @@ class MemReportParser {
      * @returns {boolean} True if line is a section header
      */
     static isSectionHeader(line) {
-        // Look for lines with === patterns
+        // Check for MemReport command patterns
+        if (/^MemReport: Begin command/.test(line)) {
+            return true;
+        }
+        
+        // Check for direct section headers (lines that follow MemReport commands)
+        if (/^(Platform Memory Stats|Memory Stats|Allocator Stats)/i.test(line)) {
+            return true;
+        }
+        if (/^Obj List:/i.test(line)) {
+            return true;
+        }
+        if (/^(RHI resource memory|Tracked RHIResources)/i.test(line)) {
+            return true;
+        }
+        if (/^Listing (NONVT|uncompressed) textures/i.test(line)) {
+            return true;
+        }
+        if (/^Levels:/i.test(line)) {
+            return true;
+        }
+        if (/^Listing spawned actors/i.test(line)) {
+            return true;
+        }
+        if (/^(Pooled|Deferred) Render Targets:/i.test(line)) {
+            return true;
+        }
+        
+        // Legacy format support - Look for lines with === patterns
         if (/^=+.*=+$/.test(line)) {
             return true;
         }
@@ -393,8 +513,86 @@ class MemReportParser {
      * @returns {string} Clean section title
      */
     static extractSectionTitle(headerLine) {
-        // Remove === markers and trim
+        // Handle MemReport command format
+        if (/^MemReport: Begin command/.test(headerLine)) {
+            const commandMatch = headerLine.match(/MemReport: Begin command "([^"]+)"/);
+            if (commandMatch) {
+                return this.cleanCommandTitle(commandMatch[1]);
+            }
+            return 'Unknown Command';
+        }
+        
+        // Handle direct section headers
+        if (/^Obj List:/i.test(headerLine)) {
+            return headerLine.trim();
+        }
+        if (/^(Platform Memory Stats|Memory Stats|Allocator Stats)/i.test(headerLine)) {
+            return headerLine.trim();
+        }
+        if (/^(RHI resource memory|Tracked RHIResources)/i.test(headerLine)) {
+            return headerLine.trim();
+        }
+        if (/^Listing (NONVT|uncompressed) textures/i.test(headerLine)) {
+            return headerLine.trim();
+        }
+        if (/^Levels:/i.test(headerLine)) {
+            return headerLine.trim();
+        }
+        if (/^Listing spawned actors/i.test(headerLine)) {
+            return headerLine.trim();
+        }
+        if (/^(Pooled|Deferred) Render Targets:/i.test(headerLine)) {
+            return headerLine.trim();
+        }
+        
+        // Legacy format - Remove === markers and trim
         return headerLine.replace(/=+/g, '').trim();
+    }
+
+    /**
+     * Clean up command titles for better display
+     * @param {string} command - Raw command string
+     * @returns {string} Cleaned command title
+     */
+    static cleanCommandTitle(command) {
+        // Map common commands to friendly names
+        const commandMap = {
+            'Mem FromReport': 'Memory Overview',
+            'LogCountedInstances': 'Counted Instances',
+            'obj list -resourcesizesort': 'Object List (by Resource Size)',
+            'obj list class=SkeletalMesh -resourcesizesort': 'Skeletal Meshes (by Size)',
+            'obj list class=StaticMesh -resourcesizesort': 'Static Meshes (by Size)',
+            'rhi.DumpMemory': 'RHI Memory Dump',
+            'rhi.DumpResourceMemory': 'RHI Resource Memory',
+            'listtextures nonvt': 'Non-Virtual Textures',
+            'listtextures uncompressed': 'Uncompressed Textures',
+            'LogOutStatLevels': 'Levels',
+            'ListSpawnedActors': 'Spawned Actors',
+            'wp.DumpDataLayers': 'World Partition Data Layers',
+            'wp.DumpStreamingSources': 'World Partition Streaming Sources',
+            'r.DumpRenderTargetPoolMemory': 'Render Target Pool Memory'
+        };
+        
+        // Check for exact matches first
+        if (commandMap[command]) {
+            return commandMap[command];
+        }
+        
+        // Check for partial matches for summary commands
+        if (command.includes('rhi.dumpresourcememory summary')) {
+            const nameMatch = command.match(/name=(\w+)/);
+            const typeMatch = command.match(/Type=(\w+)/);
+            if (nameMatch) {
+                return `RHI Resources: ${nameMatch[1]}`;
+            }
+            if (typeMatch) {
+                return `RHI Resources: ${typeMatch[1]}`;
+            }
+            return 'RHI Resource Summary';
+        }
+        
+        // Default: capitalize and clean up
+        return command.charAt(0).toUpperCase() + command.slice(1).replace(/[._]/g, ' ');
     }
 
     /**
@@ -466,27 +664,41 @@ class MemReportParser {
      */
     static detectSectionType(sectionData) {
         const lines = sectionData.lines;
+        const title = sectionData.title || '';
         
         if (lines.length === 0) {
             return 'raw';
         }
 
+        // Special handling for known section types
+        if (/Obj List:/i.test(title)) {
+            return 'table'; // Object lists are always tables
+        }
+        
+        if (/Listing.*textures/i.test(title)) {
+            return 'table'; // Texture listings are tables (but with special format)
+        }
+        
+        if (/Render Targets/i.test(title)) {
+            return 'table'; // Render target lists are tables
+        }
+        
+        if (/(Platform Memory Stats|Memory Stats|Allocator Stats)/i.test(title)) {
+            return 'kv'; // Memory stats are key-value
+        }
+
         // Look for table patterns - multiple columns with consistent spacing
         const potentialHeaderLine = lines.find(line => 
-            line.includes('Class') || 
-            line.includes('Name') || 
-            line.includes('Count') ||
-            line.includes('Size') ||
-            line.includes('KB') ||
-            line.includes('MB')
+            this.isTableHeader(line)
         );
 
         if (potentialHeaderLine) {
             // Check if we have data rows that match the header pattern
             const headerColumns = potentialHeaderLine.split(/\s+/).length;
             const dataRows = lines.slice(1).filter(line => 
-                line.split(/\s+/).length >= headerColumns - 1 && // Allow some flexibility
-                line.split(/\s+/).length <= headerColumns + 2
+                line.trim().length > 0 && 
+                line.split(/\s+/).length >= Math.max(2, headerColumns - 2) && // Allow more flexibility
+                line.split(/\s+/).length <= headerColumns + 5
             );
             
             if (dataRows.length > 0) {
@@ -494,11 +706,24 @@ class MemReportParser {
             }
         }
 
+        // Check for structured data patterns (like render targets without headers)
+        const structuredDataLines = lines.filter(line => {
+            // Look for lines with consistent patterns like "512.000MB 16384x4096..."
+            return /^\s*\d+\.\d+MB\s+\d+x\d+/.test(line) || // Render target format
+                   /^\d+x\d+.*KB.*PF_/.test(line) || // Texture format
+                   /^\s+\d+\.\d+MB\s+\-/.test(line); // Memory stat format
+        });
+        
+        if (structuredDataLines.length > lines.length * 0.6) {
+            return 'table';
+        }
+
         // Look for key-value patterns
         const kvLines = lines.filter(line => 
             line.includes(':') || 
             line.includes('=') ||
-            /\w+\s+\d+/.test(line) // word followed by number
+            /^\w+.*\d+(\.\d+)?\s*(MB|KB|GB|bytes?)\s*$/.test(line) || // word followed by memory value
+            /^\w+\s+\d+/.test(line) // word followed by number
         );
 
         if (kvLines.length > lines.length * 0.5) {
@@ -516,9 +741,52 @@ class MemReportParser {
     static generateSectionKey(title) {
         // Check against known patterns first
         for (const [key, pattern] of Object.entries(this.SECTION_PATTERNS)) {
-            if (pattern.test(`=== ${title} ===`)) {
+            if (pattern.test(title)) {
                 return key;
             }
+        }
+
+        // Handle specific section types
+        if (/Memory Overview|Platform Memory Stats|Memory Stats/i.test(title)) {
+            return 'memory_stats';
+        }
+        if (/Object List.*Resource Size|obj list.*resourcesizesort/i.test(title)) {
+            return 'obj_list';
+        }
+        if (/Skeletal Meshes|SkeletalMesh/i.test(title)) {
+            return 'skeletal_meshes';
+        }
+        if (/Static Meshes|StaticMesh/i.test(title)) {
+            return 'static_meshes';
+        }
+        if (/Non-Virtual Textures|NONVT textures/i.test(title)) {
+            return 'textures_nonvt';
+        }
+        if (/Uncompressed Textures/i.test(title)) {
+            return 'textures_uncompressed';
+        }
+        if (/RHI.*Memory|RHI.*Resource/i.test(title)) {
+            return 'rhi_memory';
+        }
+        if (/RHI Resources:/i.test(title)) {
+            // Extract resource type for unique key
+            const typeMatch = title.match(/RHI Resources:\s*(\w+)/);
+            if (typeMatch) {
+                return `rhi_${typeMatch[1].toLowerCase()}`;
+            }
+            return 'rhi_resources';
+        }
+        if (/Levels/i.test(title)) {
+            return 'levels';
+        }
+        if (/Spawned Actors/i.test(title)) {
+            return 'actors';
+        }
+        if (/Render Target.*Pool/i.test(title)) {
+            return 'render_targets';
+        }
+        if (/Deferred Render Targets/i.test(title)) {
+            return 'deferred_targets';
         }
 
         // Generate key from title
@@ -575,7 +843,7 @@ class MemReportParser {
     /**
      * Parse table section with column detection and data extraction
      * @param {string[]} lines - Section lines
-     * @param {string} title - Section title (unused but kept for interface consistency)
+     * @param {string} title - Section title
      * @returns {Object} Parsed table data with columns and rows
      */
     static parseTableSection(lines, title) {
@@ -583,6 +851,23 @@ class MemReportParser {
             throw new Error('Table section is empty or undefined');
         }
 
+        // Handle special formats
+        if (/Listing.*textures/i.test(title)) {
+            return this.parseTextureListingTable(lines, title);
+        }
+        
+        if (/Render Targets/i.test(title)) {
+            return this.parseRenderTargetTable(lines, title);
+        }
+
+        // Standard table parsing
+        return this.parseStandardTable(lines, title);
+    }
+
+    /**
+     * Parse standard table with header row
+     */
+    static parseStandardTable(lines, title) {
         // Find the header line (usually contains column names)
         let headerLineIndex = -1;
         let headerLine = '';
@@ -602,7 +887,7 @@ class MemReportParser {
                 // Try alternative header detection
                 const potentialHeaders = lines.slice(0, 3).filter(line => 
                     line.split(/\s+/).length >= 3 && 
-                    line.split(/\s+/).length <= 15
+                    line.split(/\s+/).length <= 20
                 );
                 
                 if (potentialHeaders.length > 0) {
@@ -677,6 +962,143 @@ class MemReportParser {
     }
 
     /**
+     * Parse texture listing table (special format)
+     */
+    static parseTextureListingTable(lines, title) {
+        // Skip description lines and find data
+        const dataLines = lines.filter(line => 
+            line.trim().length > 0 && 
+            !line.startsWith('MaxAllowedSize:') &&
+            !line.startsWith('Listing')
+        );
+
+        if (dataLines.length === 0) {
+            throw new Error('No texture data found');
+        }
+
+        // Define columns for texture listing
+        const columns = [
+            'MaxSize', 'CurrentSize', 'Format', 'LODGroup', 'Name', 
+            'Streaming', 'UnknownRef', 'VT', 'UsageCount', 'NumMips', 'Uncompressed'
+        ];
+
+        const rows = [];
+        const rowErrors = [];
+
+        for (let i = 0; i < dataLines.length; i++) {
+            const line = dataLines[i];
+            try {
+                const row = this.parseTextureRow(line);
+                if (row && row.length > 0) {
+                    rows.push(row);
+                }
+            } catch (rowError) {
+                rowErrors.push({
+                    lineNumber: i + 1,
+                    line: line,
+                    error: rowError.message
+                });
+            }
+        }
+
+        return {
+            columns,
+            rows,
+            notes: `Parsed ${rows.length} texture entries${rowErrors.length > 0 ? ` (${rowErrors.length} errors)` : ''}`
+        };
+    }
+
+    /**
+     * Parse render target table (special format)
+     */
+    static parseRenderTargetTable(lines, title) {
+        // Skip empty lines and summary lines
+        const dataLines = lines.filter(line => 
+            line.trim().length > 0 && 
+            /^\s*\d+\.\d+MB/.test(line) // Lines starting with memory size
+        );
+
+        if (dataLines.length === 0) {
+            throw new Error('No render target data found');
+        }
+
+        // Define columns for render targets
+        const columns = ['Size', 'Dimensions', 'Array', 'Mips', 'Name', 'Format', 'UnusedFrames'];
+
+        const rows = [];
+        const rowErrors = [];
+
+        for (let i = 0; i < dataLines.length; i++) {
+            const line = dataLines[i];
+            try {
+                const row = this.parseRenderTargetRow(line);
+                if (row && row.length > 0) {
+                    rows.push(row);
+                }
+            } catch (rowError) {
+                rowErrors.push({
+                    lineNumber: i + 1,
+                    line: line,
+                    error: rowError.message
+                });
+            }
+        }
+
+        return {
+            columns,
+            rows,
+            notes: `Parsed ${rows.length} render target entries${rowErrors.length > 0 ? ` (${rowErrors.length} errors)` : ''}`
+        };
+    }
+
+    /**
+     * Parse a texture listing row
+     */
+    static parseTextureRow(line) {
+        // Texture format: "8192x8192 (262144 KB, 0), 8192x8192 (262144 KB), PF_R32_UINT, TEXTUREGROUP_World, /Engine/Transient.Texture..., NO, NO, NO, 0, 1, NO"
+        const parts = line.split(', ');
+        if (parts.length < 6) {
+            throw new Error('Invalid texture row format');
+        }
+
+        const maxSize = parts[0].trim();
+        const currentSize = parts[1].trim();
+        const format = parts[2].trim();
+        const lodGroup = parts[3].trim();
+        const name = parts[4].trim();
+        const streaming = parts[5]?.trim() || '';
+        const unknownRef = parts[6]?.trim() || '';
+        const vt = parts[7]?.trim() || '';
+        const usageCount = parts[8]?.trim() || '';
+        const numMips = parts[9]?.trim() || '';
+        const uncompressed = parts[10]?.trim() || '';
+
+        return [maxSize, currentSize, format, lodGroup, name, streaming, unknownRef, vt, usageCount, numMips, uncompressed];
+    }
+
+    /**
+     * Parse a render target row
+     */
+    static parseRenderTargetRow(line) {
+        // Render target format: "  512.000MB 16384x4096    [  2]  1mip(s) Shadow.Virtual.PhysicalPagePool (R32_UINT) Unused frames: 0"
+        const match = line.match(/^\s*(\d+\.\d+MB)\s+(\d+x\d+(?:x\d+)?)\s*(?:\[\s*(\d+)\])?\s*(\d+mip\(s\))\s+([^(]+)\s*\(([^)]+)\)\s*Unused frames:\s*(\d+)/);
+        
+        if (!match) {
+            throw new Error('Invalid render target row format');
+        }
+
+        const size = match[1];
+        const dimensions = match[2];
+        const arraySize = match[3] || '1';
+        const mips = match[4];
+        const name = match[5].trim();
+        const format = match[6];
+        const unusedFrames = match[7];
+
+        return [size, dimensions, arraySize, mips, name, format, unusedFrames];
+    }
+
+    /**
      * Check if a line looks like a table header
      * @param {string} line - Line to check
      * @returns {boolean} True if line appears to be a table header
@@ -685,7 +1107,8 @@ class MemReportParser {
         const headerIndicators = [
             'class', 'name', 'count', 'size', 'kb', 'mb', 'bytes',
             'total', 'num', 'res', 'exclusive', 'object', 'asset',
-            'memory', 'usage', 'type'
+            'memory', 'usage', 'type', 'width', 'height', 'format',
+            'maxkb', 'numkb', 'reskb', 'mip', 'unused', 'frames'
         ];
         
         const lowerLine = line.toLowerCase();
@@ -695,7 +1118,7 @@ class MemReportParser {
         
         // Must have at least 2 header indicators and reasonable number of columns
         const columnCount = line.split(/\s+/).length;
-        return matchCount >= 2 && columnCount >= 3 && columnCount <= 15;
+        return matchCount >= 2 && columnCount >= 3 && columnCount <= 20;
     }
 
     /**
@@ -1236,12 +1659,17 @@ class MemReportParser {
 
         // Check for recognizable section headers
         const lines = fileContent.split('\n');
-        const hasSectionHeaders = lines.some(line => 
+        const hasModernSectionHeaders = lines.some(line => 
+            /^MemReport: Begin command/.test(line.trim()) ||
+            /^(Platform Memory Stats|Memory Stats|Obj List:|RHI resource memory|Listing.*textures|Levels:|Listing spawned actors|Pooled Render Targets:)/i.test(line.trim())
+        );
+        
+        const hasLegacySectionHeaders = lines.some(line => 
             /^=+.*=+$/.test(line.trim()) || 
             /^[A-Z\s\-_]{10,}$/.test(line.trim())
         );
 
-        if (!hasSectionHeaders) {
+        if (!hasModernSectionHeaders && !hasLegacySectionHeaders) {
             issues.push({
                 type: 'warning',
                 message: 'No recognizable section headers found',

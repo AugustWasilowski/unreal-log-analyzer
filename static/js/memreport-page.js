@@ -162,16 +162,20 @@ class MemReportPage {
         });
         
         // Progress card
-        const progressCard = Utils.createElement('div', 'card border-primary', {
-            style: 'max-width: 500px; width: 100%;'
+        const progressCard = Utils.createElement('div', 'card', {
+            style: 'max-width: 500px; width: 100%; background-color: #23272b; border: 1px solid #333; color: #e0e0e0;'
         });
         
-        const cardHeader = Utils.createElement('div', 'card-header bg-primary text-white');
+        const cardHeader = Utils.createElement('div', 'card-header', {
+            style: 'background-color: #007bff; color: white; border-bottom: 1px solid #333;'
+        });
         const headerTitle = Utils.createElement('h5', 'mb-0');
         headerTitle.textContent = 'Processing MemReport File';
         cardHeader.appendChild(headerTitle);
         
-        const cardBody = Utils.createElement('div', 'card-body');
+        const cardBody = Utils.createElement('div', 'card-body', {
+            style: 'background-color: #23272b; color: #e0e0e0;'
+        });
         
         // Progress bar
         const progressWrapper = Utils.createElement('div', 'progress mb-3', {
@@ -285,16 +289,20 @@ class MemReportPage {
             style: 'min-height: 300px;'
         });
         
-        const errorCard = Utils.createElement('div', 'card border-danger', {
-            style: 'max-width: 600px; width: 100%;'
+        const errorCard = Utils.createElement('div', 'card', {
+            style: 'max-width: 600px; width: 100%; background-color: #23272b; border: 1px solid #dc3545; color: #e0e0e0;'
         });
         
-        const cardHeader = Utils.createElement('div', 'card-header bg-danger text-white');
+        const cardHeader = Utils.createElement('div', 'card-header', {
+            style: 'background-color: #dc3545; color: white; border-bottom: 1px solid #333;'
+        });
         const headerTitle = Utils.createElement('h5', 'mb-0');
         headerTitle.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i>${Utils.sanitizeInput(title)}`;
         cardHeader.appendChild(headerTitle);
         
-        const cardBody = Utils.createElement('div', 'card-body');
+        const cardBody = Utils.createElement('div', 'card-body', {
+            style: 'background-color: #23272b; color: #e0e0e0;'
+        });
         
         // Error message
         const errorText = Utils.createElement('p', 'text-danger mb-3');
@@ -361,16 +369,20 @@ class MemReportPage {
             style: 'min-height: 300px;'
         });
         
-        const warningCard = Utils.createElement('div', 'card border-warning', {
-            style: 'max-width: 600px; width: 100%;'
+        const warningCard = Utils.createElement('div', 'card', {
+            style: 'max-width: 600px; width: 100%; background-color: #23272b; border: 1px solid #ffc107; color: #e0e0e0;'
         });
         
-        const cardHeader = Utils.createElement('div', 'card-header bg-warning text-dark');
+        const cardHeader = Utils.createElement('div', 'card-header', {
+            style: 'background-color: #ffc107; color: #000; border-bottom: 1px solid #333;'
+        });
         const headerTitle = Utils.createElement('h5', 'mb-0');
         headerTitle.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>File Validation Warnings';
         cardHeader.appendChild(headerTitle);
         
-        const cardBody = Utils.createElement('div', 'card-body');
+        const cardBody = Utils.createElement('div', 'card-body', {
+            style: 'background-color: #23272b; color: #e0e0e0;'
+        });
         
         const introText = Utils.createElement('p', 'mb-3');
         introText.textContent = 'The selected file has some potential issues but can still be processed:';
@@ -592,23 +604,29 @@ class MemReportPage {
     renderMetadata(meta) {
         const metaCard = Utils.createElement('div', 'card mb-3 memreport-meta', {
             'role': 'region',
-            'aria-labelledby': 'meta-header'
+            'aria-labelledby': 'meta-header',
+            'style': 'background-color: #23272b; border: 1px solid #333; color: #e0e0e0;'
         });
         
-        const cardHeader = Utils.createElement('div', 'card-header');
+        const cardHeader = Utils.createElement('div', 'card-header', {
+            'style': 'background-color: #2d3136; border-bottom: 1px solid #333; color: #e0e0e0;'
+        });
         const headerTitle = Utils.createElement('h5', 'mb-0', {
             id: 'meta-header'
         });
         headerTitle.textContent = 'Memory Report Overview';
         cardHeader.appendChild(headerTitle);
         
-        const cardBody = Utils.createElement('div', 'card-body');
+        const cardBody = Utils.createElement('div', 'card-body', {
+            'style': 'background-color: #23272b; color: #e0e0e0;'
+        });
         
         // Create metadata table with proper ARIA support
         const metaTable = Utils.createElement('table', 'table table-sm', {
             'role': 'table',
             'aria-label': 'Memory report metadata',
-            'aria-describedby': 'meta-description'
+            'aria-describedby': 'meta-description',
+            'style': 'color: #e0e0e0;'
         });
         
         // Add description for screen readers
@@ -686,7 +704,8 @@ class MemReportPage {
         const sectionCard = Utils.createElement('div', 'card mb-3 memreport-section', {
             'role': 'region',
             'aria-labelledby': `section-${section.key}`,
-            'data-section-key': section.key
+            'data-section-key': section.key,
+            'style': 'background-color: #23272b; border: 1px solid #333; color: #e0e0e0;'
         });
         
         // Create section header
@@ -703,7 +722,9 @@ class MemReportPage {
             'aria-labelledby': `section-${section.key}`
         });
         
-        const cardBody = Utils.createElement('div', 'card-body');
+        const cardBody = Utils.createElement('div', 'card-body', {
+            'style': 'background-color: #23272b; color: #e0e0e0;'
+        });
         
         // Render section content based on type
         const sectionContent = this.renderSectionContent(section);
@@ -720,7 +741,9 @@ class MemReportPage {
         const isPinned = this.appState.isSectionPinned(section.key);
         const isCollapsed = this.appState.isSectionCollapsed(section.key);
         
-        const cardHeader = Utils.createElement('div', 'card-header sticky-card-header');
+        const cardHeader = Utils.createElement('div', 'card-header sticky-card-header', {
+            'style': 'background-color: #2d3136; border-bottom: 1px solid #333; color: #e0e0e0;'
+        });
         cardHeader.setAttribute('id', `section-${section.key}`);
         
         const headerRow = Utils.createElement('div', 'd-flex justify-content-between align-items-center');
@@ -750,18 +773,20 @@ class MemReportPage {
         
         // Row count badge with proper ARIA labeling
         const rowCount = this.getSectionRowCount(section);
-        const countBadge = Utils.createElement('span', 'badge bg-secondary me-2', {
+        const countBadge = Utils.createElement('span', 'badge me-2', {
             id: `count-${section.key}`,
             'aria-label': `${rowCount} ${section.type === 'table' ? 'rows' : 'items'} in ${section.title}`,
-            'role': 'status'
+            'role': 'status',
+            'style': 'background-color: #444; color: #e0e0e0;'
         });
         countBadge.textContent = `${rowCount} ${section.type === 'table' ? 'rows' : 'items'}`;
         
         // Pin indicator with proper ARIA labeling
         if (isPinned) {
-            const pinIndicator = Utils.createElement('span', 'badge bg-primary me-2', {
+            const pinIndicator = Utils.createElement('span', 'badge me-2', {
                 'aria-label': `${section.title} is pinned to top`,
-                'role': 'status'
+                'role': 'status',
+                'style': 'background-color: #007bff; color: white;'
             });
             pinIndicator.textContent = '📌 Pinned';
             leftSide.appendChild(pinIndicator);
@@ -805,10 +830,11 @@ class MemReportPage {
         
         // Search button (for table sections)
         if (section.type === 'table') {
-            const searchBtn = Utils.createElement('button', 'btn btn-outline-secondary', {
+            const searchBtn = Utils.createElement('button', 'btn', {
                 type: 'button',
                 title: 'Search this section',
-                'aria-label': `Search ${section.title}`
+                'aria-label': `Search ${section.title}`,
+                'style': 'background-color: #444; border: 1px solid #666; color: #e0e0e0;'
             });
             searchBtn.innerHTML = '🔍';
             searchBtn.addEventListener('click', () => this.toggleSectionSearch(section.key));
@@ -817,11 +843,12 @@ class MemReportPage {
         
         // Chart button (for table sections with numeric data)
         if (section.type === 'table' && MemReportCharts && MemReportCharts.supportsCharts(section)) {
-            const chartBtn = Utils.createElement('button', 'btn btn-outline-secondary', {
+            const chartBtn = Utils.createElement('button', 'btn', {
                 type: 'button',
                 title: 'Show chart visualization',
                 'aria-label': `Show chart for ${section.title}`,
-                'data-section-key': section.key
+                'data-section-key': section.key,
+                'style': 'background-color: #444; border: 1px solid #666; color: #e0e0e0;'
             });
             chartBtn.innerHTML = '📈';
             chartBtn.addEventListener('click', () => this.toggleSectionChart(section.key));
@@ -829,10 +856,11 @@ class MemReportPage {
         }
         
         // Export button
-        const exportBtn = Utils.createElement('button', 'btn btn-outline-secondary', {
+        const exportBtn = Utils.createElement('button', 'btn', {
             type: 'button',
             title: 'Export section data',
-            'aria-label': `Export ${section.title}`
+            'aria-label': `Export ${section.title}`,
+            'style': 'background-color: #444; border: 1px solid #666; color: #e0e0e0;'
         });
         exportBtn.innerHTML = '📊';
         exportBtn.addEventListener('click', () => this.showExportOptions(section.key));
@@ -840,10 +868,11 @@ class MemReportPage {
         
         // Pin/Unpin button
         const isPinned = this.appState.isSectionPinned(section.key);
-        const pinBtn = Utils.createElement('button', 'btn btn-outline-secondary', {
+        const pinBtn = Utils.createElement('button', 'btn', {
             type: 'button',
             title: isPinned ? 'Unpin section' : 'Pin section to top',
-            'aria-label': `${isPinned ? 'Unpin' : 'Pin'} ${section.title}`
+            'aria-label': `${isPinned ? 'Unpin' : 'Pin'} ${section.title}`,
+            'style': 'background-color: #444; border: 1px solid #666; color: #e0e0e0;'
         });
         pinBtn.innerHTML = isPinned ? '📌' : '📍';
         pinBtn.addEventListener('click', () => {
@@ -888,9 +917,12 @@ class MemReportPage {
         }
         
         // Create table wrapper
-        const tableWrapper = Utils.createElement('div', 'table-responsive');
+        const tableWrapper = Utils.createElement('div', 'table-responsive', {
+            'style': 'background-color: #23272b; border: 1px solid #333; border-radius: 0.375rem;'
+        });
         const tableElement = Utils.createElement('div', 'memreport-table', {
-            id: `table-${section.key}`
+            id: `table-${section.key}`,
+            'style': 'color: #e0e0e0;'
         });
         
         tableWrapper.appendChild(tableElement);
@@ -934,10 +966,11 @@ class MemReportPage {
             return kvContainer;
         }
         
-        const kvTable = Utils.createElement('table', 'table table-sm table-striped', {
+        const kvTable = Utils.createElement('table', 'table table-sm', {
             'role': 'table',
             'aria-label': `${section.title} key-value data`,
-            'aria-describedby': `kv-summary-${section.key}`
+            'aria-describedby': `kv-summary-${section.key}`,
+            'style': 'color: #e0e0e0; --bs-table-striped-bg: #2d3136;'
         });
         
         // Add table summary for screen readers
@@ -1005,7 +1038,9 @@ class MemReportPage {
         
         // Show enhanced error information if present
         if (section.error) {
-            const errorAlert = Utils.createElement('div', 'alert alert-warning');
+            const errorAlert = Utils.createElement('div', 'alert', {
+                'style': 'background-color: #856404; border: 1px solid #ffc107; color: #fff3cd; border-radius: 0.375rem; padding: 0.75rem;'
+            });
             
             const errorHeader = Utils.createElement('div', 'd-flex align-items-start');
             const errorIcon = Utils.createElement('i', 'fas fa-exclamation-triangle me-2 mt-1');
@@ -1029,11 +1064,12 @@ class MemReportPage {
             
             // Add error context if available (from enhanced parser)
             if (section.errorContext) {
-                const contextToggle = Utils.createElement('button', 'btn btn-sm btn-outline-warning mt-2', {
+                const contextToggle = Utils.createElement('button', 'btn btn-sm mt-2', {
                     'type': 'button',
                     'data-bs-toggle': 'collapse',
                     'data-bs-target': `#error-context-${section.key}`,
-                    'aria-expanded': 'false'
+                    'aria-expanded': 'false',
+                    'style': 'background-color: #ffc107; border: 1px solid #ffc107; color: #000;'
                 });
                 contextToggle.innerHTML = '<i class="fas fa-info-circle me-1"></i>Show Details';
                 
@@ -1041,7 +1077,9 @@ class MemReportPage {
                     'id': `error-context-${section.key}`
                 });
                 
-                const contextContent = Utils.createElement('div', 'small bg-light p-2 rounded');
+                const contextContent = Utils.createElement('div', 'small p-2 rounded', {
+                    'style': 'background-color: #2d3136; color: #e0e0e0; border: 1px solid #444;'
+                });
                 
                 if (section.errorContext.possibleCauses) {
                     const causesTitle = Utils.createElement('div', 'fw-bold mb-1');
@@ -1111,10 +1149,12 @@ class MemReportPage {
         contentHeader.appendChild(copyButton);
         rawContainer.appendChild(contentHeader);
         
-        const preElement = Utils.createElement('pre', 'bg-light p-3 border rounded', {
-            style: 'max-height: 400px; overflow-y: auto;'
+        const preElement = Utils.createElement('pre', 'p-3 border rounded', {
+            style: 'max-height: 400px; overflow-y: auto; background-color: #2d3136; border-color: #444; color: #e0e0e0;'
         });
-        const codeElement = Utils.createElement('code');
+        const codeElement = Utils.createElement('code', '', {
+            'style': 'color: #e0e0e0;'
+        });
         
         if (section.rawLines && section.rawLines.length > 0) {
             codeElement.textContent = section.rawLines.join('\n');
@@ -1149,13 +1189,15 @@ class MemReportPage {
             placeholder: `Search ${sectionTitle}...`,
             'aria-label': `Search ${sectionTitle}`,
             'aria-describedby': `search-help-${sectionKey} search-status-${sectionKey}`,
-            id: `search-${sectionKey}`
+            id: `search-${sectionKey}`,
+            'style': 'background-color: #23272b; color: #e0e0e0; border: 1px solid #444;'
         });
         
-        const clearButton = Utils.createElement('button', 'btn btn-outline-secondary', {
+        const clearButton = Utils.createElement('button', 'btn', {
             type: 'button',
             title: 'Clear search',
-            'aria-label': `Clear search for ${sectionTitle}`
+            'aria-label': `Clear search for ${sectionTitle}`,
+            'style': 'background-color: #444; border: 1px solid #666; color: #e0e0e0;'
         });
         clearButton.innerHTML = '✕';
         
@@ -1245,17 +1287,22 @@ class MemReportPage {
         const section = this.appState.getFilteredSectionData(sectionKey);
         
         // Create temporary menu
-        const menu = Utils.createElement('div', 'dropdown-menu show position-absolute');
-        menu.style.zIndex = '1050';
+        const menu = Utils.createElement('div', 'dropdown-menu show position-absolute', {
+            'style': 'z-index: 1050; background-color: #23272b; border: 1px solid #333; color: #e0e0e0;'
+        });
         
-        const csvOption = Utils.createElement('button', 'dropdown-item');
+        const csvOption = Utils.createElement('button', 'dropdown-item', {
+            'style': 'background-color: #23272b; color: #e0e0e0; border: none;'
+        });
         csvOption.textContent = 'Export as CSV';
         csvOption.addEventListener('click', () => {
             this.exportSectionAsCSV(section);
             document.body.removeChild(menu);
         });
         
-        const jsonOption = Utils.createElement('button', 'dropdown-item');
+        const jsonOption = Utils.createElement('button', 'dropdown-item', {
+            'style': 'background-color: #23272b; color: #e0e0e0; border: none;'
+        });
         jsonOption.textContent = 'Export as JSON';
         jsonOption.addEventListener('click', () => {
             this.exportSectionAsJSON(section);
@@ -1424,16 +1471,8 @@ class MemReportPage {
     
     // Generic file download helper
     downloadFile(content, filename, mimeType) {
-        const blob = new Blob([content], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = Utils.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        // Use the centralized utility function to avoid duplication
+        Utils.downloadAsFile(content, filename, mimeType);
     }
 
     // Toggle chart visibility for a section
@@ -1674,19 +1713,24 @@ class MemReportPage {
 
     // Render parse errors section
     renderParseErrors(parseErrors) {
-        const errorsCard = Utils.createElement('div', 'card mb-3 border-warning');
+        const errorsCard = Utils.createElement('div', 'card mb-3', {
+            'style': 'background-color: #23272b; border: 1px solid #ffc107; color: #e0e0e0;'
+        });
         
-        const cardHeader = Utils.createElement('div', 'card-header bg-warning text-dark d-flex justify-content-between align-items-center');
+        const cardHeader = Utils.createElement('div', 'card-header d-flex justify-content-between align-items-center', {
+            'style': 'background-color: #ffc107; color: #000; border-bottom: 1px solid #333;'
+        });
         const headerTitle = Utils.createElement('h5', 'mb-0');
         headerTitle.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i>Parsing Issues (${parseErrors.length})`;
         
         // Collapsible toggle button
-        const toggleButton = Utils.createElement('button', 'btn btn-sm btn-outline-dark', {
+        const toggleButton = Utils.createElement('button', 'btn btn-sm', {
             'type': 'button',
             'data-bs-toggle': 'collapse',
             'data-bs-target': '#parseErrorsCollapse',
             'aria-expanded': 'false',
-            'aria-controls': 'parseErrorsCollapse'
+            'aria-controls': 'parseErrorsCollapse',
+            'style': 'background-color: #000; border: 1px solid #333; color: #ffc107;'
         });
         toggleButton.innerHTML = '<i class="fas fa-chevron-down"></i>';
         
@@ -1697,7 +1741,9 @@ class MemReportPage {
             'id': 'parseErrorsCollapse'
         });
         
-        const cardBody = Utils.createElement('div', 'card-body');
+        const cardBody = Utils.createElement('div', 'card-body', {
+            'style': 'background-color: #23272b; color: #e0e0e0;'
+        });
         
         // Summary message
         const summaryText = Utils.createElement('p', 'text-muted mb-3');
@@ -1706,7 +1752,9 @@ class MemReportPage {
         
         const errorsList = Utils.createElement('div', 'mb-0');
         parseErrors.forEach((error, index) => {
-            const errorItem = Utils.createElement('div', 'alert alert-warning mb-2');
+            const errorItem = Utils.createElement('div', 'alert mb-2', {
+                'style': 'background-color: #856404; border: 1px solid #ffc107; color: #fff3cd; border-radius: 0.375rem; padding: 0.75rem;'
+            });
             
             const errorHeader = Utils.createElement('div', 'd-flex justify-content-between align-items-start');
             const errorTitle = Utils.createElement('strong');
@@ -1732,7 +1780,9 @@ class MemReportPage {
         cardBody.appendChild(errorsList);
         
         // Help text
-        const helpText = Utils.createElement('div', 'alert alert-info mt-3');
+        const helpText = Utils.createElement('div', 'alert mt-3', {
+            'style': 'background-color: #0c5460; border: 1px solid #17a2b8; color: #d1ecf1; border-radius: 0.375rem; padding: 0.75rem;'
+        });
         helpText.innerHTML = `
             <i class="fas fa-info-circle me-2"></i>
             <strong>Note:</strong> Sections with parsing issues are displayed as raw text content. 

@@ -50,8 +50,8 @@ class UI {
         // Initialize elements first
         this.initializeElements();
         
-        console.log('Setting up drag and drop...');
-        this.setupDragAndDrop();
+        // Drag and drop is now handled by app.js setupDragAndDrop()
+        // this.setupDragAndDrop();
         console.log('Setting up search history...');
         this.setupSearchHistory();
         console.log('Setting up keyboard navigation...');
@@ -59,64 +59,13 @@ class UI {
         this.initialized = true;
     }
 
-    // Setup drag and drop functionality
+    // Setup drag and drop functionality - REMOVED
+    // This functionality is now handled by app.js setupDragAndDrop() 
+    // to avoid duplicate event listeners that cause the file dialog to open twice
     setupDragAndDrop() {
-        const dropZone = this.elements.dropZone;
-        
-        // Check if dropZone exists
-        if (!dropZone) {
-            return;
-        }
-        
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-            });
-        });
-
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => {
-                dropZone.classList.add('drag-over');
-                if (window.app && window.app.appState) {
-                    window.app.appState.update({ ui: { dragOver: true } });
-                }
-            });
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => {
-                dropZone.classList.remove('drag-over');
-                if (window.app && window.app.appState) {
-                    window.app.appState.update({ ui: { dragOver: false } });
-                }
-            });
-        });
-
-        dropZone.addEventListener('drop', (e) => {
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                const file = files[0];
-                if (file.type === 'text/plain' || file.name.endsWith('.log') || file.name.endsWith('.txt')) {
-                    this.elements.logFile.files = e.dataTransfer.files;
-                    this.elements.uploadForm.requestSubmit();
-                } else {
-                    Utils.showErrorToast('Please select a valid log file (.log or .txt)');
-                }
-            }
-        });
-
-        // Click to browse
-        dropZone.addEventListener('click', () => {
-            this.elements.logFile.click();
-        });
-
-        dropZone.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                this.elements.logFile.click();
-            }
-        });
+        // Drag and drop functionality moved to app.js to handle both log and memreport files
+        // and prevent duplicate event listeners
+        return;
     }
 
     // Setup search history functionality
@@ -330,7 +279,13 @@ class UI {
     // Export functionality
     exportToCsv() {
         const entries = window.app.appState.getFilteredEntries();
-        const csvContent = this.generateCsvContent(entries);
+        const headers = ['Type', 'Level', 'Content'];
+        const rows = entries.map(entry => [
+            entry.type,
+            window.app.appState.detectLogLevel(entry.content),
+            entry.content
+        ]);
+        const csvContent = Utils.tableToCSV(headers, rows);
         this.downloadFile(csvContent, 'log_entries.csv', 'text/csv');
     }
 
@@ -340,30 +295,11 @@ class UI {
         this.downloadFile(jsonContent, 'log_entries.json', 'application/json');
     }
 
-    generateCsvContent(entries) {
-        const headers = ['Type', 'Level', 'Content'];
-        const rows = entries.map(entry => [
-            entry.type,
-            window.app.appState.detectLogLevel(entry.content),
-            entry.content.replace(/"/g, '""') // Escape quotes for CSV
-        ]);
-        
-        const csvRows = [headers, ...rows];
-        return csvRows.map(row => 
-            row.map(cell => `"${cell}"`).join(',')
-        ).join('\n');
-    }
+    // generateCsvContent method removed - now using Utils.tableToCSV() to avoid duplication
 
     downloadFile(content, filename, mimeType) {
-        const blob = new Blob([content], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        // Use the centralized utility function to avoid duplication
+        Utils.downloadAsFile(content, filename, mimeType);
     }
 
     // Keyboard navigation support

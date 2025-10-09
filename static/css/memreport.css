@@ -48,16 +48,17 @@
 
 /* Search and filter styling */
 .section-search-filters {
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
+    background-color: #2d3136;
+    border: 1px solid #444;
     border-radius: 0.375rem;
     padding: 1rem;
+    color: #e0e0e0;
 }
 
 .filter-status {
     margin-top: 0.5rem;
     padding-top: 0.5rem;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid #444;
 }
 
 /* Table responsiveness */
@@ -76,15 +77,16 @@
 .chart-container {
     max-height: 500px;
     margin: 1rem 0;
-    border: 1px solid #dee2e6;
+    border: 1px solid #444;
     border-radius: 0.375rem;
     padding: 1rem;
-    background-color: #ffffff;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background-color: #2d3136;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    color: #e0e0e0;
 }
 
 .chart-container h6 {
-    color: #495057;
+    color: #e0e0e0;
     font-weight: 600;
     margin-bottom: 0.5rem;
 }
@@ -138,19 +140,20 @@
 
 /* Chart configuration panel */
 .chart-config-panel {
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
+    background-color: #2d3136;
+    border: 1px solid #444;
     border-radius: 0.375rem;
     padding: 1rem;
     margin-top: 1rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    color: #e0e0e0;
 }
 
 .chart-config-panel h6 {
-    color: #495057;
+    color: #e0e0e0;
     font-weight: 600;
     margin-bottom: 1rem;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid #444;
     padding-bottom: 0.5rem;
 }
 
@@ -183,18 +186,21 @@
 /* Chart export dropdown */
 .chart-container .dropdown-menu {
     min-width: 150px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    border: 1px solid #dee2e6;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border: 1px solid #444;
+    background-color: #23272b;
+    color: #e0e0e0;
 }
 
 .chart-container .dropdown-item {
     padding: 0.5rem 1rem;
     font-size: 0.9rem;
     transition: background-color 0.2s ease;
+    color: #e0e0e0;
 }
 
 .chart-container .dropdown-item:hover {
-    background-color: #f8f9fa;
+    background-color: #2d3136;
     color: #007bff;
 }
 
@@ -210,22 +216,26 @@
     font-size: 0.875rem;
     border-radius: 0.2rem;
     transition: all 0.2s ease;
+    background-color: #444;
+    border-color: #666;
+    color: #e0e0e0;
 }
 
 .chart-container .btn-outline-secondary {
-    border-color: #6c757d;
-    color: #6c757d;
+    background-color: #444;
+    border-color: #666;
+    color: #e0e0e0;
 }
 
 .chart-container .btn-outline-secondary:hover {
-    background-color: #6c757d;
-    border-color: #6c757d;
+    background-color: #555;
+    border-color: #777;
     color: white;
     transform: translateY(-1px);
 }
 
 .chart-container .btn-outline-secondary:focus {
-    box-shadow: 0 0 0 0.2rem rgba(108, 117, 125, 0.25);
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
 
 /* Chart interaction feedback */
@@ -243,9 +253,9 @@
     align-items: center;
     justify-content: center;
     height: 200px;
-    color: #6c757d;
+    color: #888;
     font-style: italic;
-    background: linear-gradient(90deg, #f8f9fa 25%, #e9ecef 50%, #f8f9fa 75%);
+    background: linear-gradient(90deg, #2d3136 25%, #23272b 50%, #2d3136 75%);
     background-size: 200% 100%;
     animation: shimmer 2s infinite;
 }
@@ -257,9 +267,9 @@
 
 /* Chart success feedback */
 .chart-config-panel .alert-success {
-    border-color: #d4edda;
-    background-color: #d1e7dd;
-    color: #0f5132;
+    border-color: #28a745;
+    background-color: #155724;
+    color: #a5d6a7;
     font-size: 0.9rem;
     padding: 0.75rem;
     margin-bottom: 0;
@@ -280,21 +290,13 @@
     transition: transform 0.2s ease;
 }
 
-/* Chart loading state */
-.chart-loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 200px;
-    color: #6c757d;
-    font-style: italic;
-}
+/* Chart loading state (duplicate - removing) */
 
 /* Chart error state */
 .chart-error {
-    background-color: #f8d7da;
-    border: 1px solid #f5c6cb;
-    color: #721c24;
+    background-color: #721c24;
+    border: 1px solid #dc3545;
+    color: #ef9a9a;
     padding: 1rem;
     border-radius: 0.375rem;
     text-align: center;
@@ -302,7 +304,7 @@
 
 /* Chart accessibility improvements */
 .chart-container canvas[role="img"] {
-    border: 1px solid #dee2e6;
+    border: 1px solid #444;
 }
 
 .chart-container canvas[role="img"]:focus {
@@ -311,8 +313,103 @@
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
 }
 
-/* Dark theme support for charts */
-@media (prefers-color-scheme: dark) {
+/* Dark theme support for charts and all components */
+.chart-container {
+    background-color: #2d3136;
+    border-color: #444;
+    color: #e0e0e0;
+}
+
+.chart-container h6 {
+    color: #e0e0e0;
+}
+
+.chart-container canvas {
+    border-color: #444;
+}
+
+/* Dark theme for all MemReport components */
+.memreport-section .card {
+    background-color: #23272b;
+    border-color: #333;
+    color: #e0e0e0;
+}
+
+.memreport-section .card-header {
+    background-color: #2d3136;
+    border-bottom-color: #333;
+    color: #e0e0e0;
+}
+
+.memreport-section .card-body {
+    background-color: #23272b;
+    color: #e0e0e0;
+}
+
+.memreport-section .table {
+    color: #e0e0e0;
+    --bs-table-bg: #23272b;
+    --bs-table-striped-bg: #2d3136;
+    --bs-table-hover-bg: #2d3136;
+    --bs-table-border-color: #444;
+}
+
+.memreport-section .table th,
+.memreport-section .table td {
+    border-color: #444;
+}
+
+.memreport-section .form-control {
+    background-color: #23272b;
+    color: #e0e0e0;
+    border-color: #444;
+}
+
+.memreport-section .form-control:focus {
+    background-color: #23272b;
+    color: #fff;
+    border-color: #888;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.memreport-section .btn {
+    background-color: #444;
+    border-color: #666;
+    color: #e0e0e0;
+}
+
+.memreport-section .btn:hover {
+    background-color: #555;
+    border-color: #777;
+    color: #fff;
+}
+
+.memreport-section .dropdown-menu {
+    background-color: #23272b;
+    border-color: #333;
+    color: #e0e0e0;
+}
+
+.memreport-section .dropdown-item {
+    color: #e0e0e0;
+}
+
+.memreport-section .dropdown-item:hover {
+    background-color: #2d3136;
+    color: #007bff;
+}
+
+.memreport-section .alert {
+    border-radius: 0.375rem;
+}
+
+.memreport-section .badge {
+    background-color: #444;
+    color: #e0e0e0;
+}
+
+/* Override media query to always apply dark theme */
+@media (prefers-color-scheme: dark), (prefers-color-scheme: light) {
     .chart-container {
         background-color: #2d3136;
         border-color: #444;
@@ -401,7 +498,7 @@
 .memreport-loading {
     text-align: center;
     padding: 2rem;
-    color: #6c757d;
+    color: #888;
 }
 
 .memreport-loading::after {
@@ -418,9 +515,9 @@
 
 /* Error states */
 .memreport-error {
-    background-color: #f8d7da;
-    border: 1px solid #f5c6cb;
-    color: #721c24;
+    background-color: #721c24;
+    border: 1px solid #dc3545;
+    color: #ef9a9a;
     padding: 1rem;
     border-radius: 0.375rem;
     margin: 1rem 0;
@@ -430,7 +527,7 @@
 .memreport-empty {
     text-align: center;
     padding: 3rem 1rem;
-    color: #6c757d;
+    color: #888;
 }
 
 /* Pin indicator styling */
@@ -475,8 +572,9 @@
     position: relative;
     overflow-y: auto;
     overflow-x: hidden;
-    border: 1px solid #dee2e6;
+    border: 1px solid #444;
     border-radius: 0.375rem;
+    background-color: #23272b;
 }
 
 .virtual-scroll-visible-rows {
@@ -511,7 +609,12 @@
     position: sticky;
     top: 0;
     z-index: 5;
-    background: var(--bs-dark);
+    background: #2d3136;
+    color: #e0e0e0;
+}
+
+.virtual-scroll-table {
+    color: #e0e0e0;
 }
 
 /* Performance optimizations for virtual scrolling */
@@ -529,28 +632,32 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(35, 39, 43, 0.9);
+    color: #e0e0e0;
     padding: 1rem;
     border-radius: 0.375rem;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
     z-index: 10;
 }
 
 /* Progress indicator styles */
 .memreport-progress-container {
     min-height: 300px;
-    background: #f8f9fa;
+    background: #181a1b;
     border-radius: 0.375rem;
     padding: 2rem;
 }
 
 .memreport-progress-container .card {
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    background-color: #23272b;
+    border-color: #333;
+    color: #e0e0e0;
 }
 
 .memreport-progress-container .progress {
     height: 20px;
-    background-color: #e9ecef;
+    background-color: #2d3136;
     border-radius: 10px;
     overflow: hidden;
 }
@@ -574,9 +681,9 @@
 
 /* Large table indicators */
 .large-table-indicator {
-    background: #fff3cd;
-    border: 1px solid #ffeaa7;
-    color: #856404;
+    background: #856404;
+    border: 1px solid #ffc107;
+    color: #fff3cd;
     padding: 0.75rem;
     border-radius: 0.375rem;
     margin-bottom: 1rem;
@@ -585,6 +692,125 @@
 
 .large-table-indicator .badge {
     margin-left: 0.5rem;
+}
+
+/* Additional dark theme overrides */
+.memreport-container,
+.memreport-container * {
+    color: #e0e0e0 !important;
+}
+
+.memreport-container .text-muted {
+    color: #888 !important;
+}
+
+.memreport-container .text-danger {
+    color: #ef9a9a !important;
+}
+
+.memreport-container .text-warning {
+    color: #ffd54f !important;
+}
+
+.memreport-container .text-success {
+    color: #a5d6a7 !important;
+}
+
+.memreport-container .text-info {
+    color: #4fc3f7 !important;
+}
+
+.memreport-container .border {
+    border-color: #444 !important;
+}
+
+.memreport-container .border-primary {
+    border-color: #007bff !important;
+}
+
+.memreport-container .border-danger {
+    border-color: #dc3545 !important;
+}
+
+.memreport-container .border-warning {
+    border-color: #ffc107 !important;
+}
+
+.memreport-container .border-success {
+    border-color: #28a745 !important;
+}
+
+.memreport-container .border-info {
+    border-color: #17a2b8 !important;
+}
+
+/* Force dark theme for all cards and components */
+.memreport-container .card,
+.memreport-container .card-header,
+.memreport-container .card-body {
+    background-color: #23272b !important;
+    border-color: #333 !important;
+    color: #e0e0e0 !important;
+}
+
+.memreport-container .card-header {
+    background-color: #2d3136 !important;
+}
+
+.memreport-container .table {
+    color: #e0e0e0 !important;
+    --bs-table-bg: #23272b !important;
+    --bs-table-striped-bg: #2d3136 !important;
+    --bs-table-hover-bg: #2d3136 !important;
+    --bs-table-border-color: #444 !important;
+}
+
+.memreport-container .btn {
+    background-color: #444 !important;
+    border-color: #666 !important;
+    color: #e0e0e0 !important;
+}
+
+.memreport-container .btn:hover {
+    background-color: #555 !important;
+    border-color: #777 !important;
+    color: #fff !important;
+}
+
+.memreport-container .form-control {
+    background-color: #23272b !important;
+    color: #e0e0e0 !important;
+    border-color: #444 !important;
+}
+
+.memreport-container .form-control:focus {
+    background-color: #23272b !important;
+    color: #fff !important;
+    border-color: #888 !important;
+}
+
+.memreport-container .alert {
+    border-radius: 0.375rem !important;
+}
+
+.memreport-container .badge {
+    background-color: #444 !important;
+    color: #e0e0e0 !important;
+}
+
+.memreport-container .dropdown-menu {
+    background-color: #23272b !important;
+    border-color: #333 !important;
+    color: #e0e0e0 !important;
+}
+
+.memreport-container .dropdown-item {
+    color: #e0e0e0 !important;
+}
+
+.memreport-container .dropdown-item:hover {
+    background-color: #2d3136 !important;
+    color: #007bff !important;
 }
 
 /* Reduced motion support */
