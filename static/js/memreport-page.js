@@ -260,6 +260,9 @@ class MemReportPage {
             return;
         }
 
+        // Cleanup any existing charts before clearing content
+        this.cleanupCharts(container);
+        
         // Clear existing content
         container.innerHTML = '';
 
@@ -532,6 +535,19 @@ class MemReportPage {
             searchBtn.innerHTML = '🔍';
             searchBtn.addEventListener('click', () => this.toggleSectionSearch(section.key));
             buttonGroup.appendChild(searchBtn);
+        }
+        
+        // Chart button (for table sections with numeric data)
+        if (section.type === 'table' && MemReportCharts && MemReportCharts.supportsCharts(section)) {
+            const chartBtn = Utils.createElement('button', 'btn btn-outline-secondary', {
+                type: 'button',
+                title: 'Show chart visualization',
+                'aria-label': `Show chart for ${section.title}`,
+                'data-section-key': section.key
+            });
+            chartBtn.innerHTML = '📈';
+            chartBtn.addEventListener('click', () => this.toggleSectionChart(section.key));
+            buttonGroup.appendChild(chartBtn);
         }
         
         // Export button
@@ -1036,6 +1052,196 @@ class MemReportPage {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    }
+
+    // Toggle chart visibility for a section
+    toggleSectionChart(sectionKey) {
+        const sectionElement = document.querySelector(`[data-section-key="${sectionKey}"]`);
+        if (!sectionElement) return;
+        
+        const chartContainer = sectionElement.querySelector('.chart-container');
+        const chartBtn = sectionElement.querySelector(`button[data-section-key="${sectionKey}"][title="Show chart visualization"]`);
+        
+        if (chartContainer) {
+            // Chart exists, toggle visibility
+            const isVisible = chartContainer.style.display !== 'none';
+            chartContainer.style.display = isVisible ? 'none' : 'block';
+            
+            // Cleanup chart interactions when hiding
+            if (isVisible) {
+                const canvas = chartContainer.querySelector('canvas');
+                if (canvas && canvas.id) {
+                    // Don't fully cleanup, just hide - interactions remain for when shown again
+                    const tooltip = document.querySelector('.chart-tooltip');
+                    if (tooltip) {
+                        tooltip.style.display = 'none';
+                    }
+                }
+            }
+            
+            // Update button state
+            if (chartBtn) {
+                chartBtn.innerHTML = isVisible ? '📈' : '📉';
+                chartBtn.title = isVisible ? 'Show chart visualization' : 'Hide chart visualization';
+                chartBtn.setAttribute('aria-label', `${isVisible ? 'Show' : 'Hide'} chart for section`);
+            }
+            
+            // Announce to screen readers
+            Utils.announceToScreenReader(`Chart ${isVisible ? 'hidden' : 'shown'}`);
+        } else {
+            // Chart doesn't exist, create it
+            this.createSectionChart(sectionKey);
+        }
+    }
+
+    // Create and render chart for a section
+    createSectionChart(sectionKey) {
+        const section = this.appState.getFilteredSectionData(sectionKey);
+        if (!section || !MemReportCharts.supportsCharts(section)) {
+            console.warn('Section does not support charts:', sectionKey);
+            return;
+        }
+        
+        const sectionElement = document.querySelector(`[data-section-key="${sectionKey}"]`);
+        if (!sectionElement) return;
+        
+        const cardBody = sectionElement.querySelector('.card-body');
+        if (!cardBody) return;
+        
+        // Get chart data
+        const chartData = MemReportCharts.getChartData(section);
+        if (!chartData) {
+            console.warn('No chart data available for section:', sectionKey);
+            return;
+        }
+        
+        // Create chart container
+        const chartContainer = MemReportCharts.createChartContainer(section, (visible) => {
+            const chartBtn = sectionElement.querySelector(`button[data-section-key="${sectionKey}"][title*="chart"]`);
+            if (chartBtn) {
+                chartBtn.innerHTML = visible ? '📉' : '📈';
+                chartBtn.title = visible ? 'Hide chart visualization' : 'Show chart visualization';
+            }
+        });
+        
+        // Create canvas with unique ID
+        const chartId = `chart_${sectionKey}_${Date.now()}`;
+        const canvas = MemReportCharts.createChartCanvas(600, 300, chartData.title);
+        canvas.id = chartId;
+        chartContainer.appendChild(canvas);
+        
+        // Create configuration panel (initially hidden)
+        const configPanel = MemReportCharts.createConfigPanel(chartId, (config) => {
+            // Configuration change callback
+            console.log('Chart configuration changed:', config);
+        });
+        configPanel.id = `chart-config-${chartId}`;
+        configPanel.style.display = 'none';
+        chartContainer.appendChild(configPanel);
+        
+        // Setup export event handlers
+        const exportPngBtn = chartContainer.querySelector('.export-png');
+        const exportSvgBtn = chartContainer.querySelector('.export-svg');
+        
+        if (exportPngBtn) {
+            exportPngBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const filename = `${section.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_chart.png`;
+                MemReportCharts.exportChartAsPNG(chartId, filename);
+            });
+        }
+        
+        if (exportSvgBtn) {
+            exportSvgBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const filename = `${section.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_chart.svg`;
+                MemReportCharts.exportChartAsSVG(chartId, filename);
+            });
+        }
+        
+        // Setup configuration button
+        const configBtn = chartContainer.querySelector('button[title="Chart configuration"]');
+        if (configBtn) {
+            configBtn.addEventListener('click', () => {
+                MemReportCharts.toggleConfigPanel(chartId);
+            });
+        }
+        
+        // Insert chart container after table (or at end of card body)
+        const tableSection = cardBody.querySelector('.table-section');
+        if (tableSection) {
+            tableSection.appendChild(chartContainer);
+        } else {
+            cardBody.appendChild(chartContainer);
+        }
+        
+        // Show chart container
+        chartContainer.style.display = 'block';
+        
+        // Render chart with slight delay to ensure canvas is in DOM
+        requestAnimationFrame(() => {
+            try {
+                MemReportCharts.renderBarChart(canvas, chartData, {
+                    backgroundColor: '#f8f9fa',
+                    colors: this.getChartColors(chartData.values.length),
+                    showTooltips: true,
+                    showValues: true
+                });
+                
+                // Setup custom event listener for bar clicks
+                canvas.addEventListener('chartBarClick', (event) => {
+                    const { bar, chartData } = event.detail;
+                    console.log(`Bar clicked: ${bar.label} (${bar.value})`);
+                    
+                    // Could implement additional actions here, like:
+                    // - Show detailed information modal
+                    // - Filter table to show only this item
+                    // - Navigate to related section
+                    Utils.announceToScreenReader(`Selected ${bar.label} with value ${MemReportCharts.formatChartValue(bar.value)}`);
+                });
+                
+                // Update button state
+                const chartBtn = sectionElement.querySelector(`button[data-section-key="${sectionKey}"][title*="chart"]`);
+                if (chartBtn) {
+                    chartBtn.innerHTML = '📉';
+                    chartBtn.title = 'Hide chart visualization';
+                    chartBtn.setAttribute('aria-label', `Hide chart for ${section.title}`);
+                }
+                
+                // Announce to screen readers
+                Utils.announceToScreenReader(`Interactive chart created for ${section.title} showing ${chartData.values.length} items. Use mouse to hover for details or click bars for more information.`);
+                
+            } catch (error) {
+                console.error('Error rendering chart:', error);
+                chartContainer.innerHTML = '<div class="alert alert-warning">Error rendering chart</div>';
+            }
+        });
+    }
+
+    // Cleanup all chart instances in a container
+    cleanupCharts(container) {
+        if (!container || !MemReportCharts) return;
+        
+        // Find all chart canvases and cleanup their instances
+        const canvases = container.querySelectorAll('canvas[id^="chart_"]');
+        canvases.forEach(canvas => {
+            if (canvas.id) {
+                MemReportCharts.cleanupChart(canvas.id);
+            }
+        });
+        
+        // Remove any lingering tooltips
+        const tooltips = document.querySelectorAll('.chart-tooltip');
+        tooltips.forEach(tooltip => tooltip.remove());
+    }
+
+    // Get chart colors for consistent theming
+    getChartColors(count) {
+        const colors = [
+            '#007bff', '#28a745', '#ffc107', '#dc3545', '#6f42c1',
+            '#fd7e14', '#20c997', '#e83e8c', '#6c757d', '#17a2b8'
+        ];
+        return colors.slice(0, count);
     }
 
     // Update section table after filter/sort changes
