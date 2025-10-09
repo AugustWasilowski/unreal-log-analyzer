@@ -16,7 +16,20 @@ class AppState {
             ui: {
                 dragOver: false,
                 searchDropdownOpen: false
-            }
+            },
+            // MemReport state
+            memreport: {
+                meta: { engineVersion: "", map: "", timestamp: "", generator: "memreport" },
+                sections: [],
+                ui: {
+                    pinnedSections: [],
+                    collapsedSections: [],
+                    sectionFilters: {}, // per-section search terms
+                    sectionSorts: {} // per-section sort state
+                }
+            },
+            // Current route: 'log' or 'memreport'
+            currentRoute: 'log'
         };
         this.listeners = [];
         this.subscriptionsPaused = false;
@@ -177,6 +190,104 @@ class AppState {
         if (/\bError\b/i.test(content)) return 'Error';
         if (/\bDisplay\b/i.test(content)) return 'Display';
         return '';
+    }
+
+    // MemReport-specific methods
+    setCurrentRoute(route) {
+        this.update({ currentRoute: route });
+    }
+
+    getCurrentRoute() {
+        return this.state.currentRoute;
+    }
+
+    setMemReportData(memreportData) {
+        this.update({ memreport: { ...this.state.memreport, ...memreportData } });
+    }
+
+    updateMemReportFilters(sectionKey, filters) {
+        const newSectionFilters = { ...this.state.memreport.ui.sectionFilters };
+        newSectionFilters[sectionKey] = filters;
+        
+        this.update({
+            memreport: {
+                ...this.state.memreport,
+                ui: {
+                    ...this.state.memreport.ui,
+                    sectionFilters: newSectionFilters
+                }
+            }
+        });
+    }
+
+    updateMemReportSort(sectionKey, sortState) {
+        const newSectionSorts = { ...this.state.memreport.ui.sectionSorts };
+        newSectionSorts[sectionKey] = sortState;
+        
+        this.update({
+            memreport: {
+                ...this.state.memreport,
+                ui: {
+                    ...this.state.memreport.ui,
+                    sectionSorts: newSectionSorts
+                }
+            }
+        });
+    }
+
+    getFilteredSectionData(sectionKey) {
+        const section = this.state.memreport.sections.find(s => s.key === sectionKey);
+        if (!section || section.type !== 'table') {
+            return section;
+        }
+
+        const filters = this.state.memreport.ui.sectionFilters[sectionKey] || {};
+        const sortState = this.state.memreport.ui.sectionSorts[sectionKey] || {};
+
+        let filteredRows = [...section.rows];
+
+        // Apply search filter
+        if (filters.search) {
+            const searchTerm = filters.search.toLowerCase();
+            filteredRows = filteredRows.filter(row =>
+                row.some(cell => String(cell).toLowerCase().includes(searchTerm))
+            );
+        }
+
+        // Apply sorting
+        if (sortState.column !== undefined && sortState.column !== null) {
+            const columnIndex = sortState.column;
+            const isNumeric = this.isNumericColumn(section.columns[columnIndex]);
+            
+            filteredRows.sort((a, b) => {
+                let aVal = a[columnIndex];
+                let bVal = b[columnIndex];
+                
+                if (isNumeric) {
+                    aVal = parseFloat(aVal) || 0;
+                    bVal = parseFloat(bVal) || 0;
+                } else {
+                    aVal = String(aVal).toLowerCase();
+                    bVal = String(bVal).toLowerCase();
+                }
+                
+                if (sortState.direction === 'desc') {
+                    return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                } else {
+                    return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+                }
+            });
+        }
+
+        return {
+            ...section,
+            rows: filteredRows
+        };
+    }
+
+    isNumericColumn(columnName) {
+        const numericPatterns = /\b(KB|MB|Bytes?|Size|Memory|Count|Num|Total)\b/i;
+        return numericPatterns.test(columnName);
     }
 }
 
