@@ -12,6 +12,9 @@ class LogAnalyzerApp {
         };
         this.currentRoute = 'log';
         
+        // MemReport page instance (initialized lazily)
+        this.memreportPage = null;
+        
         // Initialize UI first, then setup event listeners
         this.initializeApp();
     }
@@ -53,9 +56,9 @@ class LogAnalyzerApp {
         }
 
         if (this.ui.elements.logFile) {
-            this.ui.elements.logFile.addEventListener('change', () => {
+            this.ui.elements.logFile.addEventListener('change', async () => {
                 if (this.ui.elements.logFile.files.length > 0) {
-                    this.handleFileSelection(this.ui.elements.logFile.files[0]);
+                    await this.handleFileSelection(this.ui.elements.logFile.files[0]);
                 }
             });
         }
@@ -72,9 +75,9 @@ class LogAnalyzerApp {
         }
 
         if (memreportFile) {
-            memreportFile.addEventListener('change', () => {
+            memreportFile.addEventListener('change', async () => {
                 if (memreportFile.files.length > 0) {
-                    this.handleFileSelection(memreportFile.files[0]);
+                    await this.handleFileSelection(memreportFile.files[0]);
                 }
             });
         }
@@ -167,13 +170,13 @@ class LogAnalyzerApp {
             });
 
             // Handle dropped files
-            element.addEventListener('drop', (e) => {
+            element.addEventListener('drop', async (e) => {
                 const files = e.dataTransfer.files;
                 if (files.length > 0) {
                     const dt = new DataTransfer();
                     dt.items.add(files[0]);
                     input.files = dt.files;
-                    this.handleFileSelection(files[0]);
+                    await this.handleFileSelection(files[0]);
                 }
             });
 
@@ -210,8 +213,12 @@ class LogAnalyzerApp {
     // Switch between routes
     switchRoute(route) {
         if (this.routes[route] && this.currentRoute !== route) {
+            const previousRoute = this.currentRoute;
             this.currentRoute = route;
             this.appState.setCurrentRoute(route);
+            
+            // Perform cleanup when switching away from routes
+            this.performRouteCleanup(previousRoute);
             
             // Update tab visibility using Bootstrap
             const tabTrigger = document.querySelector(`#${route}-tab`);
@@ -219,32 +226,95 @@ class LogAnalyzerApp {
                 const tab = new bootstrap.Tab(tabTrigger);
                 tab.show();
             }
+            
+            // Initialize route-specific components if needed
+            this.initializeRouteComponents(route);
+        }
+    }
+
+    // Perform cleanup when switching away from a route
+    performRouteCleanup(route) {
+        switch (route) {
+            case 'memreport':
+                // Clear any active charts or heavy DOM elements
+                if (this.memreportPage) {
+                    const memreportContent = document.getElementById('memreportContent');
+                    if (memreportContent) {
+                        // Clean up any charts or heavy elements
+                        this.memreportPage.cleanupCharts(memreportContent);
+                        
+                        // Clear content to free memory
+                        memreportContent.innerHTML = '';
+                    }
+                }
+                break;
+            case 'log':
+                // Clear log-specific state if needed
+                const logContent = document.getElementById('logContent');
+                if (logContent) {
+                    // Clear any heavy log content when switching away
+                    const entries = logContent.querySelectorAll('.log-entry');
+                    if (entries.length > 1000) {
+                        // Only clear if there are many entries to free memory
+                        logContent.innerHTML = '';
+                    }
+                }
+                break;
+        }
+    }
+
+    // Initialize route-specific components
+    initializeRouteComponents(route) {
+        switch (route) {
+            case 'memreport':
+                // Initialize MemReport page if not already done
+                if (!this.memreportPage) {
+                    this.memreportPage = new MemReportPage(this.appState, this.ui, Utils);
+                    this.memreportPage.initialize();
+                }
+                break;
+            case 'log':
+                // Log analyzer is always initialized
+                break;
         }
     }
 
     // Handle file selection and route to appropriate analyzer
-    handleFileSelection(file) {
+    async handleFileSelection(file) {
         if (!file) {
             Utils.showErrorToast('Please select a file');
             return;
         }
 
-        const fileType = this.detectFileType(file);
-        
-        if (fileType === 'memreport') {
-            this.switchRoute('memreport');
-            // Set the file in the memreport input and trigger upload
-            const memreportFile = document.getElementById('memreportFile');
-            if (memreportFile) {
-                // Create a new FileList-like object
-                const dt = new DataTransfer();
-                dt.items.add(file);
-                memreportFile.files = dt.files;
-                this.handleMemReportFileUpload();
+        try {
+            // Use enhanced file type detection with content analysis
+            const fileType = await this.detectFileTypeWithContent(file);
+            
+            if (fileType === 'memreport') {
+                this.switchRoute('memreport');
+                // Set the file in the memreport input and trigger upload
+                const memreportFile = document.getElementById('memreportFile');
+                if (memreportFile) {
+                    // Create a new FileList-like object
+                    const dt = new DataTransfer();
+                    dt.items.add(file);
+                    memreportFile.files = dt.files;
+                    await this.handleMemReportFileUpload();
+                }
+            } else {
+                this.switchRoute('log');
+                // Set the file in the log input
+                const logFile = document.getElementById('logFile');
+                if (logFile) {
+                    const dt = new DataTransfer();
+                    dt.items.add(file);
+                    logFile.files = dt.files;
+                }
+                await this.handleLogFileUpload();
             }
-        } else {
-            this.switchRoute('log');
-            this.handleLogFileUpload();
+        } catch (error) {
+            console.error('Error in file selection:', error);
+            Utils.showErrorToast('Failed to process file: ' + error.message);
         }
     }
 
@@ -257,16 +327,68 @@ class LogAnalyzerApp {
             return 'memreport';
         }
         
-        // For .txt files, we might need to check content in the future
-        // For now, assume .txt files are logs unless they have memreport indicators
+        // For .txt files, we need to check content to determine if it's a memreport
         if (fileName.endsWith('.txt')) {
-            // TODO: In future, could read first few lines to detect memreport format
-            // For now, default to log
+            // For now, we'll assume .txt files are logs and let the user switch manually
+            // In the future, we could read the first few lines to detect memreport format
             return 'log';
         }
         
         // Default to log for .log files and others
         return 'log';
+    }
+
+    // Enhanced file type detection with content analysis
+    async detectFileTypeWithContent(file) {
+        const fileName = file.name.toLowerCase();
+        
+        // Check file extension first
+        if (fileName.endsWith('.memreport')) {
+            return 'memreport';
+        }
+        
+        // For .txt files, read first few lines to detect memreport format
+        if (fileName.endsWith('.txt')) {
+            try {
+                const firstChunk = await this.readFileChunk(file, 0, 2048); // Read first 2KB
+                if (this.isMemReportContent(firstChunk)) {
+                    return 'memreport';
+                }
+            } catch (error) {
+                console.warn('Could not read file content for type detection:', error);
+            }
+        }
+        
+        // Default to log for .log files and others
+        return 'log';
+    }
+
+    // Read a chunk of file content
+    readFileChunk(file, start, length) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = (e) => reject(new Error('Failed to read file chunk'));
+            
+            const blob = file.slice(start, start + length);
+            reader.readAsText(blob);
+        });
+    }
+
+    // Check if content looks like a memreport file
+    isMemReportContent(content) {
+        const memreportIndicators = [
+            /^=+\s*(Memory Overview|Platform Memory|Memory Summary)\s*=+$/im,
+            /^=+\s*Obj List.*=+$/im,
+            /^=+\s*(RHI|Rendering).*Memory.*=+$/im,
+            /^=+\s*Streaming Levels.*=+$/im,
+            /^=+\s*Actors.*=+$/im,
+            /^=+\s*(ListTextures|Texture).*=+$/im,
+            /^=+\s*(ListStaticMeshes|Static.*Mesh).*=+$/im
+        ];
+        
+        // Check if content contains memreport section headers
+        return memreportIndicators.some(pattern => pattern.test(content));
     }
 
     // Handle log file upload
@@ -331,27 +453,36 @@ class LogAnalyzerApp {
         }
 
         try {
-            // For now, just show a placeholder message
-            // This will be implemented in later tasks
-            const memreportContent = document.getElementById('memreportContent');
-            if (memreportContent) {
-                memreportContent.innerHTML = `
-                    <div class="alert alert-info" role="alert">
-                        <h4 class="alert-heading">MemReport Parser Coming Soon!</h4>
-                        <p>File "${file.name}" has been selected for analysis.</p>
-                        <p class="mb-0">The MemReport parser will be implemented in the next tasks.</p>
-                    </div>
-                `;
+            // Initialize MemReport page if not already done
+            if (!this.memreportPage) {
+                this.memreportPage = new MemReportPage(this.appState, this.ui, Utils);
+                this.memreportPage.initialize();
             }
+
+            // Use the MemReport page to parse and render the file
+            await this.memreportPage.parseAndRender(file);
             
-            // Update state
+            // Update state with current file
             this.appState.update({
                 currentFile: file.name
             });
             
         } catch (error) {
-            Utils.showErrorToast('Failed to process memreport file');
+            Utils.showErrorToast('Failed to process memreport file: ' + error.message);
             console.error('MemReport processing error:', error);
+            
+            // Show error in the content area as well
+            const memreportContent = document.getElementById('memreportContent');
+            if (memreportContent) {
+                memreportContent.innerHTML = `
+                    <div class="alert alert-danger" role="alert">
+                        <h4 class="alert-heading">Processing Failed</h4>
+                        <p>Failed to process the memreport file: ${Utils.sanitizeInput(error.message)}</p>
+                        <hr>
+                        <p class="mb-0">Please try with a different file or check the browser console for more details.</p>
+                    </div>
+                `;
+            }
         } finally {
             // Reset UI state
             if (uploadButton) {

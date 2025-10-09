@@ -152,6 +152,109 @@ class Utils {
             return false;
         }
     }
+
+    // Format memory values with appropriate units
+    static formatMemoryValue(value, unit = 'KB') {
+        if (typeof value !== 'number') return value;
+        
+        if (unit === 'KB' && value >= 1024) {
+            return `${(value / 1024).toFixed(1)} MB`;
+        } else if (unit === 'MB' && value >= 1024) {
+            return `${(value / 1024).toFixed(1)} GB`;
+        }
+        
+        return `${this.formatNumber(value)} ${unit}`;
+    }
+
+    // Download data as file
+    static downloadAsFile(data, filename, mimeType = 'text/plain') {
+        const blob = new Blob([data], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Clean up the URL object
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+    }
+
+    // Convert array of objects to CSV
+    static arrayToCSV(data, headers = null) {
+        if (!data || data.length === 0) return '';
+        
+        // Use provided headers or extract from first row
+        const csvHeaders = headers || Object.keys(data[0]);
+        
+        // Create CSV content
+        const csvContent = [
+            csvHeaders.join(','),
+            ...data.map(row => 
+                csvHeaders.map(header => {
+                    const value = row[header] || '';
+                    // Escape commas and quotes
+                    return typeof value === 'string' && (value.includes(',') || value.includes('"')) 
+                        ? `"${value.replace(/"/g, '""')}"` 
+                        : value;
+                }).join(',')
+            )
+        ].join('\n');
+        
+        return csvContent;
+    }
+
+    // Convert table data to CSV format
+    static tableToCSV(columns, rows) {
+        if (!columns || !rows || rows.length === 0) return '';
+        
+        const csvContent = [
+            columns.join(','),
+            ...rows.map(row => 
+                row.map(cell => {
+                    const value = String(cell || '');
+                    // Escape commas and quotes
+                    return value.includes(',') || value.includes('"') 
+                        ? `"${value.replace(/"/g, '""')}"` 
+                        : value;
+                }).join(',')
+            )
+        ].join('\n');
+        
+        return csvContent;
+    }
+
+    // Show info toast
+    static showInfoToast(message, title = 'Info') {
+        const infoToast = document.createElement('div');
+        infoToast.className = 'toast';
+        infoToast.innerHTML = `
+            <div class="toast-header">
+                <strong class="me-auto text-info">${this.sanitizeInput(title)}</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                ${this.sanitizeInput(message)}
+            </div>
+        `;
+        
+        const toastContainer = document.querySelector('.toast-container');
+        if (toastContainer) {
+            toastContainer.appendChild(infoToast);
+            
+            const toast = new bootstrap.Toast(infoToast);
+            toast.show();
+            
+            // Remove toast element after it's hidden
+            infoToast.addEventListener('hidden.bs.toast', () => {
+                if (toastContainer.contains(infoToast)) {
+                    toastContainer.removeChild(infoToast);
+                }
+            });
+        }
+    }
 }
 
 // Export for use in other modules

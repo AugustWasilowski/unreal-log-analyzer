@@ -33,7 +33,7 @@ class MemReportPage {
 
     // Parse and render MemReport file with progress indication
     async parseAndRender(file) {
-        const container = document.getElementById('logContent');
+        const container = document.getElementById('memreportContent');
         if (!container) {
             console.error('MemReport container not found');
             return;
@@ -532,7 +532,7 @@ class MemReportPage {
 
     // Main render method - renders the entire MemReport page
     render(memreportData) {
-        const container = document.getElementById('logContent');
+        const container = document.getElementById('memreportContent');
         if (!container) {
             console.error('MemReport container not found');
             return;
