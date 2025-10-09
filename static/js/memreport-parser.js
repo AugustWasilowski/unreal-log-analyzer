@@ -47,45 +47,82 @@ class MemReportParser {
             let parseErrors = [];
 
             // Extract metadata from the beginning of the file
-            const meta = this.extractMeta(lines);
+            let meta;
+            try {
+                meta = this.extractMeta(lines);
+            } catch (error) {
+                meta = { 
+                    generator: 'memreport', 
+                    error: `Metadata extraction failed: ${error.message}` 
+                };
+                parseErrors.push(new Error(`Metadata extraction failed: ${error.message}`));
+            }
 
-            // Detect and parse sections
-            const sectionData = this.detectSections(lines);
+            // Detect and parse sections with enhanced error handling
+            let sectionData = [];
+            try {
+                sectionData = this.detectSections(lines);
+            } catch (error) {
+                parseErrors.push(new Error(`Section detection failed: ${error.message}`));
+                // Create a single raw section with all content
+                sectionData = [{
+                    title: 'Raw Content (Section Detection Failed)',
+                    lines: lines,
+                    startLine: 0
+                }];
+            }
             
-            for (const section of sectionData) {
+            for (let i = 0; i < sectionData.length; i++) {
+                const section = sectionData[i];
                 try {
                     const parsed = this.parseSection(section);
                     sections.push(parsed);
                 } catch (error) {
-                    // Add as raw section with error note
+                    // Enhanced error context
+                    const errorContext = this.createErrorContext(section, error);
+                    
+                    // Add as raw section with detailed error information
                     sections.push({
-                        key: `unknown_${sections.length}`,
-                        title: section.title || 'Unknown Section',
+                        key: `error_section_${i}`,
+                        title: section.title || `Unknown Section ${i + 1}`,
                         type: 'raw',
                         rawLines: section.lines,
-                        error: error.message
+                        error: error.message,
+                        errorContext: errorContext,
+                        fallbackReason: 'Section parsing failed - displaying raw content'
                     });
-                    parseErrors.push(error);
+                    
+                    parseErrors.push(new Error(`Section "${section.title || 'Unknown'}" parsing failed: ${error.message}`));
                 }
+            }
+
+            // If no sections were successfully parsed, ensure we have at least raw content
+            if (sections.length === 0) {
+                sections.push({
+                    key: 'emergency_fallback',
+                    title: 'Raw Content (No Sections Parsed)',
+                    type: 'raw',
+                    rawLines: lines,
+                    error: 'No sections could be parsed from this file',
+                    fallbackReason: 'Complete parsing failure - displaying entire file as raw content'
+                });
+                parseErrors.push(new Error('No sections could be successfully parsed'));
             }
 
             return {
                 meta,
                 sections,
-                parseErrors
+                parseErrors,
+                parsingStats: {
+                    totalSections: sectionData.length,
+                    successfulSections: sections.filter(s => !s.error).length,
+                    failedSections: sections.filter(s => s.error).length,
+                    rawFallbacks: sections.filter(s => s.type === 'raw' && s.error).length
+                }
             };
         } catch (error) {
-            // Complete parsing failure - return raw fallback
-            return {
-                meta: { generator: 'memreport', error: error.message },
-                sections: [{
-                    key: 'raw_fallback',
-                    title: 'Raw Content',
-                    type: 'raw',
-                    rawLines: fileContent.split('\n')
-                }],
-                parseErrors: [error]
-            };
+            // Complete parsing failure - return comprehensive fallback
+            return this.createEmergencyFallback(fileContent, error);
         }
     }
 
@@ -158,15 +195,21 @@ class MemReportParser {
                     const parsed = await this.parseSectionAsync(section);
                     sections.push(parsed);
                 } catch (error) {
-                    // Add as raw section with error note
+                    // Enhanced error context for chunked parsing
+                    const errorContext = this.createErrorContext(section, error);
+                    
+                    // Add as raw section with detailed error information
                     sections.push({
-                        key: `unknown_${sections.length}`,
-                        title: section.title || 'Unknown Section',
+                        key: `error_section_${i}`,
+                        title: section.title || `Unknown Section ${i + 1}`,
                         type: 'raw',
                         rawLines: section.lines,
-                        error: error.message
+                        error: error.message,
+                        errorContext: errorContext,
+                        fallbackReason: 'Section parsing failed during chunked processing - displaying raw content'
                     });
-                    parseErrors.push(error);
+                    
+                    parseErrors.push(new Error(`Section "${section.title || 'Unknown'}" parsing failed: ${error.message}`));
                 }
 
                 // Yield control to browser if needed
@@ -194,17 +237,8 @@ class MemReportParser {
                 message: `Parsing failed: ${error.message}` 
             });
 
-            // Complete parsing failure - return raw fallback
-            return {
-                meta: { generator: 'memreport', error: error.message },
-                sections: [{
-                    key: 'raw_fallback',
-                    title: 'Raw Content',
-                    type: 'raw',
-                    rawLines: fileContent.split('\n')
-                }],
-                parseErrors: [error]
-            };
+            // Complete parsing failure - return comprehensive fallback
+            return this.createEmergencyFallback(fileContent, error);
         }
     }
 
@@ -369,23 +403,59 @@ class MemReportParser {
      * @returns {Object} Parsed section object
      */
     static parseSection(sectionData) {
-        const sectionType = this.detectSectionType(sectionData);
-        const sectionKey = this.generateSectionKey(sectionData.title);
+        try {
+            const sectionType = this.detectSectionType(sectionData);
+            const sectionKey = this.generateSectionKey(sectionData.title);
 
-        const baseSection = {
-            key: sectionKey,
-            title: sectionData.title,
-            type: sectionType,
-            rawLines: sectionData.lines
-        };
+            const baseSection = {
+                key: sectionKey,
+                title: sectionData.title,
+                type: sectionType,
+                rawLines: sectionData.lines
+            };
 
-        switch (sectionType) {
-            case 'table':
-                return { ...baseSection, ...this.parseTableSection(sectionData.lines, sectionData.title) };
-            case 'kv':
-                return { ...baseSection, ...this.parseKeyValueSection(sectionData.lines, sectionData.title) };
-            default:
-                return { ...baseSection, type: 'raw' };
+            switch (sectionType) {
+                case 'table':
+                    try {
+                        const tableData = this.parseTableSection(sectionData.lines, sectionData.title);
+                        return { ...baseSection, ...tableData };
+                    } catch (tableError) {
+                        // Table parsing failed, fall back to raw with error info
+                        return {
+                            ...baseSection,
+                            type: 'raw',
+                            error: `Table parsing failed: ${tableError.message}`,
+                            fallbackReason: 'Table structure could not be parsed - displaying as raw text',
+                            originalType: 'table'
+                        };
+                    }
+                case 'kv':
+                    try {
+                        const kvData = this.parseKeyValueSection(sectionData.lines, sectionData.title);
+                        return { ...baseSection, ...kvData };
+                    } catch (kvError) {
+                        // Key-value parsing failed, fall back to raw with error info
+                        return {
+                            ...baseSection,
+                            type: 'raw',
+                            error: `Key-value parsing failed: ${kvError.message}`,
+                            fallbackReason: 'Key-value structure could not be parsed - displaying as raw text',
+                            originalType: 'kv'
+                        };
+                    }
+                default:
+                    return { ...baseSection, type: 'raw' };
+            }
+        } catch (error) {
+            // Complete section parsing failure
+            return {
+                key: this.generateSectionKey(sectionData.title || 'unknown'),
+                title: sectionData.title || 'Unknown Section',
+                type: 'raw',
+                rawLines: sectionData.lines || [],
+                error: `Section parsing failed: ${error.message}`,
+                fallbackReason: 'Complete section parsing failure - displaying as raw text'
+            };
         }
     }
 
@@ -509,50 +579,101 @@ class MemReportParser {
      * @returns {Object} Parsed table data with columns and rows
      */
     static parseTableSection(lines, title) {
-        if (lines.length === 0) {
-            return { columns: [], rows: [], notes: 'Empty section' };
+        if (!lines || lines.length === 0) {
+            throw new Error('Table section is empty or undefined');
         }
 
         // Find the header line (usually contains column names)
         let headerLineIndex = -1;
         let headerLine = '';
         
-        // Look for lines with common column indicators
-        for (let i = 0; i < Math.min(lines.length, 5); i++) {
-            const line = lines[i];
-            if (this.isTableHeader(line)) {
-                headerLineIndex = i;
-                headerLine = line;
-                break;
+        try {
+            // Look for lines with common column indicators
+            for (let i = 0; i < Math.min(lines.length, 5); i++) {
+                const line = lines[i];
+                if (this.isTableHeader(line)) {
+                    headerLineIndex = i;
+                    headerLine = line;
+                    break;
+                }
             }
-        }
 
-        if (headerLineIndex === -1) {
-            // No clear header found, treat as raw
-            return { columns: [], rows: [], notes: 'No table header detected' };
-        }
+            if (headerLineIndex === -1) {
+                // Try alternative header detection
+                const potentialHeaders = lines.slice(0, 3).filter(line => 
+                    line.split(/\s+/).length >= 3 && 
+                    line.split(/\s+/).length <= 15
+                );
+                
+                if (potentialHeaders.length > 0) {
+                    headerLineIndex = lines.indexOf(potentialHeaders[0]);
+                    headerLine = potentialHeaders[0];
+                } else {
+                    throw new Error('No table header could be detected in the first 5 lines');
+                }
+            }
 
-        // Parse columns from header
-        const columns = this.parseTableColumns(headerLine);
-        
-        // Parse data rows
-        const dataLines = lines.slice(headerLineIndex + 1);
-        const rows = [];
-        
-        for (const line of dataLines) {
-            if (line.trim().length === 0) continue;
+            // Parse columns from header
+            let columns;
+            try {
+                columns = this.parseTableColumns(headerLine);
+                if (columns.length === 0) {
+                    throw new Error('No valid columns could be parsed from header');
+                }
+            } catch (columnError) {
+                throw new Error(`Column parsing failed: ${columnError.message}`);
+            }
             
-            const row = this.parseTableRow(line, columns);
-            if (row && row.length > 0) {
-                rows.push(row);
+            // Parse data rows with error tolerance
+            const dataLines = lines.slice(headerLineIndex + 1);
+            const rows = [];
+            const rowErrors = [];
+            
+            for (let i = 0; i < dataLines.length; i++) {
+                const line = dataLines[i];
+                if (line.trim().length === 0) continue;
+                
+                try {
+                    const row = this.parseTableRow(line, columns);
+                    if (row && row.length > 0) {
+                        rows.push(row);
+                    }
+                } catch (rowError) {
+                    rowErrors.push({
+                        lineNumber: headerLineIndex + 1 + i,
+                        line: line,
+                        error: rowError.message
+                    });
+                    
+                    // Continue parsing other rows instead of failing completely
+                    continue;
+                }
             }
-        }
 
-        return {
-            columns: columns.map(col => col.name),
-            rows,
-            notes: `Parsed ${rows.length} rows with ${columns.length} columns`
-        };
+            // Provide detailed parsing results
+            const result = {
+                columns: columns.map(col => col.name),
+                rows,
+                notes: `Parsed ${rows.length} rows with ${columns.length} columns`
+            };
+
+            // Add row error information if any
+            if (rowErrors.length > 0) {
+                result.notes += `. ${rowErrors.length} rows had parsing errors and were skipped.`;
+                result.rowErrors = rowErrors;
+            }
+
+            // Validate that we got some data
+            if (rows.length === 0 && dataLines.filter(l => l.trim().length > 0).length > 0) {
+                throw new Error('No data rows could be parsed despite having content after header');
+            }
+
+            return result;
+
+        } catch (error) {
+            // Enhanced error with context
+            throw new Error(`Table parsing failed for section "${title}": ${error.message}. Lines available: ${lines.length}, Header found at: ${headerLineIndex}`);
+        }
     }
 
     /**
@@ -722,21 +843,67 @@ class MemReportParser {
      * @returns {Object} Parsed key-value data
      */
     static parseKeyValueSection(lines, title) {
-        const items = [];
-        
-        for (const line of lines) {
-            if (line.trim().length === 0) continue;
-            
-            const kvPair = this.parseKeyValueLine(line);
-            if (kvPair) {
-                items.push(kvPair);
-            }
+        if (!lines || lines.length === 0) {
+            throw new Error('Key-value section is empty or undefined');
         }
+
+        const items = [];
+        const parseErrors = [];
         
-        return {
-            items,
-            notes: `Parsed ${items.length} key-value pairs`
-        };
+        try {
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (line.trim().length === 0) continue;
+                
+                try {
+                    const kvPair = this.parseKeyValueLine(line);
+                    if (kvPair) {
+                        items.push(kvPair);
+                    } else {
+                        // Line couldn't be parsed as key-value, but that's not necessarily an error
+                        parseErrors.push({
+                            lineNumber: i + 1,
+                            line: line,
+                            reason: 'Line does not match any key-value pattern'
+                        });
+                    }
+                } catch (lineError) {
+                    parseErrors.push({
+                        lineNumber: i + 1,
+                        line: line,
+                        error: lineError.message
+                    });
+                }
+            }
+            
+            // Build result with error information
+            const result = {
+                items,
+                notes: `Parsed ${items.length} key-value pairs`
+            };
+
+            // Add parsing error information if significant
+            if (parseErrors.length > 0) {
+                const errorRate = parseErrors.length / lines.filter(l => l.trim().length > 0).length;
+                if (errorRate > 0.5) {
+                    // High error rate suggests this might not be a key-value section
+                    throw new Error(`High parsing error rate (${Math.round(errorRate * 100)}%) suggests this is not a key-value section`);
+                } else if (parseErrors.length > 3) {
+                    result.notes += `. ${parseErrors.length} lines could not be parsed as key-value pairs.`;
+                    result.parseErrors = parseErrors;
+                }
+            }
+
+            // Validate that we got some meaningful data
+            if (items.length === 0) {
+                throw new Error('No key-value pairs could be extracted from section content');
+            }
+
+            return result;
+
+        } catch (error) {
+            throw new Error(`Key-value parsing failed for section "${title}": ${error.message}`);
+        }
     }
 
     /**
@@ -904,6 +1071,205 @@ class MemReportParser {
         }
 
         return meta;
+    }
+
+    /**
+     * Create detailed error context for debugging
+     * @param {Object} section - Section data that failed to parse
+     * @param {Error} error - The parsing error
+     * @returns {Object} Error context information
+     */
+    static createErrorContext(section, error) {
+        return {
+            sectionTitle: section.title || 'Unknown',
+            lineCount: section.lines ? section.lines.length : 0,
+            startLine: section.startLine || 0,
+            firstFewLines: section.lines ? section.lines.slice(0, 3) : [],
+            errorType: error.name || 'Error',
+            errorMessage: error.message,
+            timestamp: new Date().toISOString(),
+            possibleCauses: this.suggestErrorCauses(section, error)
+        };
+    }
+
+    /**
+     * Suggest possible causes for parsing errors
+     * @param {Object} section - Section data that failed
+     * @param {Error} error - The parsing error
+     * @returns {Array} Array of possible causes and suggestions
+     */
+    static suggestErrorCauses(section, error) {
+        const suggestions = [];
+        
+        if (!section.lines || section.lines.length === 0) {
+            suggestions.push('Section appears to be empty');
+        }
+        
+        if (error.message.includes('column') || error.message.includes('header')) {
+            suggestions.push('Table structure may be malformed or use unexpected column layout');
+            suggestions.push('Try checking if column headers are properly aligned');
+        }
+        
+        if (error.message.includes('numeric') || error.message.includes('number')) {
+            suggestions.push('Numeric values may be in unexpected format');
+            suggestions.push('Memory units (KB/MB/GB) might not be recognized');
+        }
+        
+        if (section.title && section.title.includes('Unknown')) {
+            suggestions.push('Section header format is not recognized');
+            suggestions.push('This might be a new or custom section type');
+        }
+        
+        // Check for common formatting issues
+        if (section.lines) {
+            const hasVeryLongLines = section.lines.some(line => line.length > 500);
+            if (hasVeryLongLines) {
+                suggestions.push('Section contains unusually long lines that may cause parsing issues');
+            }
+            
+            const hasSpecialChars = section.lines.some(line => /[^\x00-\x7F]/.test(line));
+            if (hasSpecialChars) {
+                suggestions.push('Section contains non-ASCII characters that may affect parsing');
+            }
+        }
+        
+        if (suggestions.length === 0) {
+            suggestions.push('Unknown parsing error - section will be displayed as raw text');
+        }
+        
+        return suggestions;
+    }
+
+    /**
+     * Create emergency fallback when complete parsing fails
+     * @param {string} fileContent - Original file content
+     * @param {Error} error - The critical error
+     * @returns {Object} Emergency fallback structure
+     */
+    static createEmergencyFallback(fileContent, error) {
+        const lines = fileContent.split('\n');
+        
+        return {
+            meta: { 
+                generator: 'memreport', 
+                error: `Critical parsing failure: ${error.message}`,
+                fallbackMode: true,
+                originalFileSize: fileContent.length,
+                lineCount: lines.length
+            },
+            sections: [{
+                key: 'critical_error_fallback',
+                title: 'Raw File Content (Critical Error)',
+                type: 'raw',
+                rawLines: lines,
+                error: `Critical parsing error: ${error.message}`,
+                errorContext: {
+                    errorType: error.name || 'CriticalError',
+                    errorMessage: error.message,
+                    stack: error.stack,
+                    timestamp: new Date().toISOString(),
+                    fallbackReason: 'Complete parser failure - displaying entire file as raw text'
+                },
+                fallbackReason: 'Critical parsing failure - entire file displayed as raw content'
+            }],
+            parseErrors: [error],
+            parsingStats: {
+                totalSections: 0,
+                successfulSections: 0,
+                failedSections: 1,
+                rawFallbacks: 1,
+                criticalFailure: true
+            }
+        };
+    }
+
+    /**
+     * Validate file content before parsing
+     * @param {string} fileContent - File content to validate
+     * @returns {Object} Validation result with isValid flag and issues array
+     */
+    static validateFileContent(fileContent) {
+        const issues = [];
+        let isValid = true;
+
+        // Check if content exists
+        if (!fileContent || typeof fileContent !== 'string') {
+            issues.push({
+                type: 'critical',
+                message: 'File content is empty or invalid',
+                suggestion: 'Please select a valid .memreport file'
+            });
+            return { isValid: false, issues };
+        }
+
+        // Check file size
+        const contentSize = new Blob([fileContent]).size;
+        if (contentSize === 0) {
+            issues.push({
+                type: 'critical',
+                message: 'File appears to be empty',
+                suggestion: 'Please select a file that contains memory report data'
+            });
+            isValid = false;
+        } else if (contentSize > 50 * 1024 * 1024) { // 50MB
+            issues.push({
+                type: 'warning',
+                message: 'File is very large (>50MB) and may take time to process',
+                suggestion: 'Consider using a smaller memory report or be patient during parsing'
+            });
+        }
+
+        // Check for basic memreport indicators
+        const lowerContent = fileContent.toLowerCase();
+        const hasMemoryIndicators = [
+            'memory', 'memreport', 'obj list', 'texture', 'static mesh', 
+            'rhi', 'rendering', 'unreal', 'engine'
+        ].some(indicator => lowerContent.includes(indicator));
+
+        if (!hasMemoryIndicators) {
+            issues.push({
+                type: 'warning',
+                message: 'File does not appear to contain typical memory report content',
+                suggestion: 'This might not be a valid Unreal Engine memory report file'
+            });
+        }
+
+        // Check for recognizable section headers
+        const lines = fileContent.split('\n');
+        const hasSectionHeaders = lines.some(line => 
+            /^=+.*=+$/.test(line.trim()) || 
+            /^[A-Z\s\-_]{10,}$/.test(line.trim())
+        );
+
+        if (!hasSectionHeaders) {
+            issues.push({
+                type: 'warning',
+                message: 'No recognizable section headers found',
+                suggestion: 'File will be displayed as raw text. This might be a different format than expected.'
+            });
+        }
+
+        // Check line count
+        if (lines.length < 10) {
+            issues.push({
+                type: 'warning',
+                message: 'File has very few lines and may not contain complete memory report data',
+                suggestion: 'Verify this is a complete memory report file'
+            });
+        }
+
+        // Check for binary content
+        const hasBinaryContent = /[\x00-\x08\x0E-\x1F\x7F-\xFF]/.test(fileContent.substring(0, 1000));
+        if (hasBinaryContent) {
+            issues.push({
+                type: 'critical',
+                message: 'File appears to contain binary data',
+                suggestion: 'Memory reports should be text files. Please select a .txt or .memreport text file.'
+            });
+            isValid = false;
+        }
+
+        return { isValid, issues };
     }
 }
 

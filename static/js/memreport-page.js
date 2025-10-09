@@ -44,7 +44,56 @@ class MemReportPage {
             this.showProgressIndicator(container);
             
             // Read file content
-            const fileContent = await this.readFileContent(file);
+            let fileContent;
+            try {
+                fileContent = await this.readFileContent(file);
+            } catch (readError) {
+                this.showFileError(container, 'File Reading Error', 
+                    `Could not read the selected file: ${readError.message}`, 
+                    ['Ensure the file is not corrupted', 'Try selecting the file again', 'Check file permissions']);
+                return;
+            }
+
+            // Validate file content before parsing
+            this.updateProgressIndicator({ 
+                phase: 'validating', 
+                progress: 10, 
+                message: 'Validating file content...' 
+            });
+
+            const validation = MemReportParser.validateFileContent(fileContent);
+            
+            // Handle validation results
+            if (!validation.isValid) {
+                const criticalIssues = validation.issues.filter(issue => issue.type === 'critical');
+                this.showValidationError(container, criticalIssues);
+                return;
+            }
+
+            // Show validation warnings if any
+            const warnings = validation.issues.filter(issue => issue.type === 'warning');
+            if (warnings.length > 0) {
+                this.showValidationWarnings(container, warnings, () => {
+                    // Continue with parsing after user acknowledges warnings
+                    this.continueWithParsing(file, fileContent, container);
+                });
+                return;
+            }
+
+            // Continue with parsing if validation passed
+            await this.continueWithParsing(file, fileContent, container);
+            
+        } catch (error) {
+            console.error('Error in parseAndRender:', error);
+            this.showFileError(container, 'Unexpected Error', 
+                `An unexpected error occurred: ${error.message}`,
+                ['Try refreshing the page', 'Try with a different file', 'Check browser console for details']);
+        }
+    }
+
+    // Continue with parsing after validation
+    async continueWithParsing(file, fileContent, container) {
+        try {
             const fileSize = file.size;
             
             // Determine if we need chunked parsing
@@ -76,6 +125,12 @@ class MemReportPage {
                 });
             }
 
+            // Check if parsing resulted in meaningful data
+            if (this.isEmptyOrInvalidResult(memreportData)) {
+                this.showParsingResult(container, memreportData);
+                return;
+            }
+
             // Store in app state
             this.appState.setMemReportData(memreportData);
             
@@ -83,7 +138,7 @@ class MemReportPage {
             this.render(memreportData);
             
         } catch (error) {
-            console.error('Error parsing MemReport file:', error);
+            console.error('Error during parsing:', error);
             this.showParsingError(container, error.message);
         }
     }
@@ -175,6 +230,7 @@ class MemReportPage {
             // Update phase indicator
             const phaseLabels = {
                 'initializing': '🔄 Initializing',
+                'validating': '🔍 Validating File',
                 'metadata': '📋 Reading Metadata',
                 'detecting': '🔍 Detecting Sections',
                 'parsing': '⚙️ Parsing Data',
@@ -214,6 +270,15 @@ class MemReportPage {
 
     // Show parsing error
     showParsingError(container, errorMessage) {
+        this.showFileError(container, 'Parsing Error', errorMessage, [
+            'Try with a different memory report file',
+            'Check if the file is a valid Unreal Engine memory report',
+            'The file may be corrupted or in an unsupported format'
+        ]);
+    }
+
+    // Show generic file error with suggestions
+    showFileError(container, title, message, suggestions = []) {
         container.innerHTML = '';
         
         const errorContainer = Utils.createElement('div', 'd-flex flex-column align-items-center justify-content-center', {
@@ -221,35 +286,248 @@ class MemReportPage {
         });
         
         const errorCard = Utils.createElement('div', 'card border-danger', {
-            style: 'max-width: 500px; width: 100%;'
+            style: 'max-width: 600px; width: 100%;'
         });
         
         const cardHeader = Utils.createElement('div', 'card-header bg-danger text-white');
         const headerTitle = Utils.createElement('h5', 'mb-0');
-        headerTitle.textContent = 'Parsing Error';
+        headerTitle.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i>${Utils.sanitizeInput(title)}`;
         cardHeader.appendChild(headerTitle);
         
         const cardBody = Utils.createElement('div', 'card-body');
-        const errorText = Utils.createElement('p', 'text-danger');
-        errorText.textContent = errorMessage;
+        
+        // Error message
+        const errorText = Utils.createElement('p', 'text-danger mb-3');
+        errorText.textContent = message;
+        cardBody.appendChild(errorText);
+        
+        // Suggestions if provided
+        if (suggestions.length > 0) {
+            const suggestionsTitle = Utils.createElement('h6', 'text-muted');
+            suggestionsTitle.textContent = 'Suggestions:';
+            cardBody.appendChild(suggestionsTitle);
+            
+            const suggestionsList = Utils.createElement('ul', 'text-muted mb-3');
+            suggestions.forEach(suggestion => {
+                const listItem = Utils.createElement('li');
+                listItem.textContent = suggestion;
+                suggestionsList.appendChild(listItem);
+            });
+            cardBody.appendChild(suggestionsList);
+        }
+        
+        // Action buttons
+        const buttonContainer = Utils.createElement('div', 'd-flex gap-2');
         
         const retryButton = Utils.createElement('button', 'btn btn-primary');
-        retryButton.textContent = 'Try Another File';
+        retryButton.innerHTML = '<i class="fas fa-file-upload me-2"></i>Try Another File';
         retryButton.addEventListener('click', () => {
-            // Trigger file input
             const fileInput = document.getElementById('logFile');
             if (fileInput) {
                 fileInput.click();
             }
         });
         
-        cardBody.appendChild(errorText);
-        cardBody.appendChild(retryButton);
+        const helpButton = Utils.createElement('button', 'btn btn-outline-secondary');
+        helpButton.innerHTML = '<i class="fas fa-question-circle me-2"></i>Help';
+        helpButton.addEventListener('click', () => {
+            this.showFileFormatHelp();
+        });
+        
+        buttonContainer.appendChild(retryButton);
+        buttonContainer.appendChild(helpButton);
+        cardBody.appendChild(buttonContainer);
+        
         errorCard.appendChild(cardHeader);
         errorCard.appendChild(cardBody);
         errorContainer.appendChild(errorCard);
         
         container.appendChild(errorContainer);
+    }
+
+    // Show validation error for critical issues
+    showValidationError(container, criticalIssues) {
+        const message = criticalIssues.map(issue => issue.message).join('. ');
+        const suggestions = criticalIssues.flatMap(issue => issue.suggestion ? [issue.suggestion] : []);
+        
+        this.showFileError(container, 'File Validation Failed', message, suggestions);
+    }
+
+    // Show validation warnings with option to continue
+    showValidationWarnings(container, warnings, continueCallback) {
+        container.innerHTML = '';
+        
+        const warningContainer = Utils.createElement('div', 'd-flex flex-column align-items-center justify-content-center', {
+            style: 'min-height: 300px;'
+        });
+        
+        const warningCard = Utils.createElement('div', 'card border-warning', {
+            style: 'max-width: 600px; width: 100%;'
+        });
+        
+        const cardHeader = Utils.createElement('div', 'card-header bg-warning text-dark');
+        const headerTitle = Utils.createElement('h5', 'mb-0');
+        headerTitle.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>File Validation Warnings';
+        cardHeader.appendChild(headerTitle);
+        
+        const cardBody = Utils.createElement('div', 'card-body');
+        
+        const introText = Utils.createElement('p', 'mb-3');
+        introText.textContent = 'The selected file has some potential issues but can still be processed:';
+        cardBody.appendChild(introText);
+        
+        // Warning list
+        const warningsList = Utils.createElement('ul', 'text-warning mb-3');
+        warnings.forEach(warning => {
+            const listItem = Utils.createElement('li', 'mb-2');
+            listItem.innerHTML = `<strong>${Utils.sanitizeInput(warning.message)}</strong><br><small class="text-muted">${Utils.sanitizeInput(warning.suggestion)}</small>`;
+            warningsList.appendChild(listItem);
+        });
+        cardBody.appendChild(warningsList);
+        
+        // Action buttons
+        const buttonContainer = Utils.createElement('div', 'd-flex gap-2 justify-content-end');
+        
+        const cancelButton = Utils.createElement('button', 'btn btn-secondary');
+        cancelButton.innerHTML = '<i class="fas fa-times me-2"></i>Choose Different File';
+        cancelButton.addEventListener('click', () => {
+            const fileInput = document.getElementById('logFile');
+            if (fileInput) {
+                fileInput.click();
+            }
+        });
+        
+        const continueButton = Utils.createElement('button', 'btn btn-warning');
+        continueButton.innerHTML = '<i class="fas fa-arrow-right me-2"></i>Continue Anyway';
+        continueButton.addEventListener('click', continueCallback);
+        
+        buttonContainer.appendChild(cancelButton);
+        buttonContainer.appendChild(continueButton);
+        cardBody.appendChild(buttonContainer);
+        
+        warningCard.appendChild(cardHeader);
+        warningCard.appendChild(cardBody);
+        warningContainer.appendChild(warningCard);
+        
+        container.appendChild(warningContainer);
+    }
+
+    // Check if parsing result is empty or invalid
+    isEmptyOrInvalidResult(memreportData) {
+        if (!memreportData) return true;
+        if (!memreportData.sections || memreportData.sections.length === 0) return true;
+        
+        // Check if all sections are raw fallbacks due to errors
+        const allSectionsAreErrors = memreportData.sections.every(section => 
+            section.type === 'raw' && section.error
+        );
+        
+        return allSectionsAreErrors;
+    }
+
+    // Show parsing result with appropriate messaging
+    showParsingResult(container, memreportData) {
+        if (!memreportData || !memreportData.sections || memreportData.sections.length === 0) {
+            this.showFileError(container, 'No Data Found', 
+                'The file was processed but no recognizable memory report data was found.',
+                [
+                    'Verify this is a valid Unreal Engine memory report file',
+                    'Check if the file contains the expected section headers',
+                    'Try with a different memory report file'
+                ]);
+            return;
+        }
+
+        // Check if we have critical parsing failure
+        if (memreportData.parsingStats && memreportData.parsingStats.criticalFailure) {
+            this.showFileError(container, 'Critical Parsing Failure', 
+                'The file could not be parsed due to critical errors. It will be displayed as raw text.',
+                [
+                    'The file format may not be supported',
+                    'The file may be corrupted',
+                    'Try with a different memory report file'
+                ]);
+        }
+
+        // If we have some data but with many errors, show with warnings
+        const errorSections = memreportData.sections.filter(s => s.error).length;
+        const totalSections = memreportData.sections.length;
+        
+        if (errorSections > 0 && errorSections < totalSections) {
+            // Mixed results - some sections parsed, some failed
+            this.render(memreportData);
+            
+            // Show additional warning about parsing issues
+            Utils.announceToScreenReader(
+                `Memory report loaded with ${totalSections - errorSections} successful sections and ${errorSections} sections with parsing errors`
+            );
+        } else {
+            // All sections failed - show as raw content
+            this.render(memreportData);
+        }
+    }
+
+    // Show file format help dialog
+    showFileFormatHelp() {
+        const modal = Utils.createElement('div', 'modal fade', {
+            'id': 'fileFormatHelpModal',
+            'tabindex': '-1',
+            'aria-labelledby': 'fileFormatHelpModalLabel',
+            'aria-hidden': 'true'
+        });
+
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="fileFormatHelpModalLabel">
+                            <i class="fas fa-info-circle me-2"></i>Supported File Formats
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <h6>Supported File Types:</h6>
+                        <ul>
+                            <li><strong>.memreport</strong> - Unreal Engine memory report files</li>
+                            <li><strong>.txt</strong> - Text files containing memory report data</li>
+                        </ul>
+                        
+                        <h6 class="mt-3">How to Generate Memory Reports in Unreal Engine:</h6>
+                        <ol>
+                            <li>In the Unreal Editor, open the console (~ key)</li>
+                            <li>Type: <code>memreport -full</code></li>
+                            <li>The report will be saved to your project's <code>Saved/Profiling/MemReports/</code> directory</li>
+                        </ol>
+                        
+                        <h6 class="mt-3">Expected File Content:</h6>
+                        <ul>
+                            <li>Section headers marked with <code>===</code></li>
+                            <li>Memory usage data in tabular format</li>
+                            <li>Common sections: Obj List, RHI Memory, Textures, Static Meshes, etc.</li>
+                        </ul>
+                        
+                        <div class="alert alert-info mt-3">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Tip:</strong> If your file doesn't match these patterns, it will be displayed as raw text for manual review.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        
+        // Show modal using Bootstrap
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+        
+        // Clean up modal when hidden
+        modal.addEventListener('hidden.bs.modal', () => {
+            document.body.removeChild(modal);
+        });
     }
 
     // Main render method - renders the entire MemReport page
@@ -725,20 +1003,124 @@ class MemReportPage {
     renderRawSection(section) {
         const rawContainer = Utils.createElement('div', 'raw-section');
         
-        // Show error message if present
+        // Show enhanced error information if present
         if (section.error) {
             const errorAlert = Utils.createElement('div', 'alert alert-warning');
-            errorAlert.innerHTML = `<strong>Parsing Error:</strong> ${Utils.sanitizeInput(section.error)}`;
+            
+            const errorHeader = Utils.createElement('div', 'd-flex align-items-start');
+            const errorIcon = Utils.createElement('i', 'fas fa-exclamation-triangle me-2 mt-1');
+            const errorContent = Utils.createElement('div', 'flex-grow-1');
+            
+            const errorTitle = Utils.createElement('strong');
+            errorTitle.textContent = 'Parsing Error: ';
+            
+            const errorMessage = Utils.createElement('span');
+            errorMessage.textContent = section.error;
+            
+            errorContent.appendChild(errorTitle);
+            errorContent.appendChild(errorMessage);
+            
+            // Add fallback reason if available
+            if (section.fallbackReason) {
+                const reasonText = Utils.createElement('div', 'mt-2 small');
+                reasonText.innerHTML = `<strong>Reason:</strong> ${Utils.sanitizeInput(section.fallbackReason)}`;
+                errorContent.appendChild(reasonText);
+            }
+            
+            // Add error context if available (from enhanced parser)
+            if (section.errorContext) {
+                const contextToggle = Utils.createElement('button', 'btn btn-sm btn-outline-warning mt-2', {
+                    'type': 'button',
+                    'data-bs-toggle': 'collapse',
+                    'data-bs-target': `#error-context-${section.key}`,
+                    'aria-expanded': 'false'
+                });
+                contextToggle.innerHTML = '<i class="fas fa-info-circle me-1"></i>Show Details';
+                
+                const contextCollapse = Utils.createElement('div', 'collapse mt-2', {
+                    'id': `error-context-${section.key}`
+                });
+                
+                const contextContent = Utils.createElement('div', 'small bg-light p-2 rounded');
+                
+                if (section.errorContext.possibleCauses) {
+                    const causesTitle = Utils.createElement('div', 'fw-bold mb-1');
+                    causesTitle.textContent = 'Possible causes:';
+                    contextContent.appendChild(causesTitle);
+                    
+                    const causesList = Utils.createElement('ul', 'mb-2');
+                    section.errorContext.possibleCauses.forEach(cause => {
+                        const causeItem = Utils.createElement('li');
+                        causeItem.textContent = cause;
+                        causesList.appendChild(causeItem);
+                    });
+                    contextContent.appendChild(causesList);
+                }
+                
+                if (section.errorContext.lineCount !== undefined) {
+                    const statsText = Utils.createElement('div', 'text-muted');
+                    statsText.textContent = `Section had ${section.errorContext.lineCount} lines starting at line ${section.errorContext.startLine || 'unknown'}`;
+                    contextContent.appendChild(statsText);
+                }
+                
+                contextCollapse.appendChild(contextContent);
+                errorContent.appendChild(contextToggle);
+                errorContent.appendChild(contextCollapse);
+            }
+            
+            // Show original section type if it was attempted
+            if (section.originalType) {
+                const typeInfo = Utils.createElement('div', 'mt-2 small text-muted');
+                typeInfo.innerHTML = `<i class="fas fa-info-circle me-1"></i>Originally detected as: <code>${section.originalType}</code> section`;
+                errorContent.appendChild(typeInfo);
+            }
+            
+            errorHeader.appendChild(errorIcon);
+            errorHeader.appendChild(errorContent);
+            errorAlert.appendChild(errorHeader);
             rawContainer.appendChild(errorAlert);
         }
         
-        const preElement = Utils.createElement('pre', 'bg-light p-3 border rounded');
+        // Add raw content display
+        const contentHeader = Utils.createElement('div', 'd-flex justify-content-between align-items-center mb-2');
+        const contentTitle = Utils.createElement('h6', 'mb-0 text-muted');
+        contentTitle.innerHTML = '<i class="fas fa-file-alt me-2"></i>Raw Content';
+        
+        // Add copy button for raw content
+        const copyButton = Utils.createElement('button', 'btn btn-sm btn-outline-secondary', {
+            'title': 'Copy raw content to clipboard',
+            'aria-label': 'Copy raw content to clipboard'
+        });
+        copyButton.innerHTML = '<i class="fas fa-copy"></i>';
+        copyButton.addEventListener('click', () => {
+            const content = section.rawLines ? section.rawLines.join('\n') : 'No content';
+            navigator.clipboard.writeText(content).then(() => {
+                // Show temporary success feedback
+                const originalHTML = copyButton.innerHTML;
+                copyButton.innerHTML = '<i class="fas fa-check text-success"></i>';
+                setTimeout(() => {
+                    copyButton.innerHTML = originalHTML;
+                }, 1000);
+            }).catch(() => {
+                // Fallback for browsers without clipboard API
+                console.warn('Could not copy to clipboard');
+            });
+        });
+        
+        contentHeader.appendChild(contentTitle);
+        contentHeader.appendChild(copyButton);
+        rawContainer.appendChild(contentHeader);
+        
+        const preElement = Utils.createElement('pre', 'bg-light p-3 border rounded', {
+            style: 'max-height: 400px; overflow-y: auto;'
+        });
         const codeElement = Utils.createElement('code');
         
         if (section.rawLines && section.rawLines.length > 0) {
             codeElement.textContent = section.rawLines.join('\n');
         } else {
             codeElement.textContent = 'No raw data available';
+            codeElement.className = 'text-muted';
         }
         
         preElement.appendChild(codeElement);
@@ -1294,23 +1676,73 @@ class MemReportPage {
     renderParseErrors(parseErrors) {
         const errorsCard = Utils.createElement('div', 'card mb-3 border-warning');
         
-        const cardHeader = Utils.createElement('div', 'card-header bg-warning text-dark');
+        const cardHeader = Utils.createElement('div', 'card-header bg-warning text-dark d-flex justify-content-between align-items-center');
         const headerTitle = Utils.createElement('h5', 'mb-0');
-        headerTitle.textContent = `Parse Warnings (${parseErrors.length})`;
+        headerTitle.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i>Parsing Issues (${parseErrors.length})`;
+        
+        // Collapsible toggle button
+        const toggleButton = Utils.createElement('button', 'btn btn-sm btn-outline-dark', {
+            'type': 'button',
+            'data-bs-toggle': 'collapse',
+            'data-bs-target': '#parseErrorsCollapse',
+            'aria-expanded': 'false',
+            'aria-controls': 'parseErrorsCollapse'
+        });
+        toggleButton.innerHTML = '<i class="fas fa-chevron-down"></i>';
+        
         cardHeader.appendChild(headerTitle);
+        cardHeader.appendChild(toggleButton);
+        
+        const collapseContainer = Utils.createElement('div', 'collapse', {
+            'id': 'parseErrorsCollapse'
+        });
         
         const cardBody = Utils.createElement('div', 'card-body');
         
-        const errorsList = Utils.createElement('ul', 'list-unstyled mb-0');
-        parseErrors.forEach(error => {
-            const errorItem = Utils.createElement('li', 'mb-2');
-            errorItem.innerHTML = `<code>${Utils.sanitizeInput(error.message)}</code>`;
+        // Summary message
+        const summaryText = Utils.createElement('p', 'text-muted mb-3');
+        summaryText.textContent = 'Some sections encountered parsing issues but were displayed as raw content. Details:';
+        cardBody.appendChild(summaryText);
+        
+        const errorsList = Utils.createElement('div', 'mb-0');
+        parseErrors.forEach((error, index) => {
+            const errorItem = Utils.createElement('div', 'alert alert-warning mb-2');
+            
+            const errorHeader = Utils.createElement('div', 'd-flex justify-content-between align-items-start');
+            const errorTitle = Utils.createElement('strong');
+            errorTitle.textContent = `Issue ${index + 1}`;
+            
+            const errorMessage = Utils.createElement('div', 'mt-1');
+            errorMessage.innerHTML = `<code class="text-danger">${Utils.sanitizeInput(error.message)}</code>`;
+            
+            errorHeader.appendChild(errorTitle);
+            errorItem.appendChild(errorHeader);
+            errorItem.appendChild(errorMessage);
+            
+            // Add additional context if available (from enhanced error handling)
+            if (error.context) {
+                const contextDetails = Utils.createElement('div', 'mt-2 small text-muted');
+                contextDetails.innerHTML = `<strong>Context:</strong> ${Utils.sanitizeInput(error.context)}`;
+                errorItem.appendChild(contextDetails);
+            }
+            
             errorsList.appendChild(errorItem);
         });
         
         cardBody.appendChild(errorsList);
+        
+        // Help text
+        const helpText = Utils.createElement('div', 'alert alert-info mt-3');
+        helpText.innerHTML = `
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Note:</strong> Sections with parsing issues are displayed as raw text content. 
+            This allows you to manually review the data even when automatic parsing fails.
+        `;
+        cardBody.appendChild(helpText);
+        
+        collapseContainer.appendChild(cardBody);
         errorsCard.appendChild(cardHeader);
-        errorsCard.appendChild(cardBody);
+        errorsCard.appendChild(collapseContainer);
         
         return errorsCard;
     }
