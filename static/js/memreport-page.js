@@ -476,57 +476,150 @@ class MemReportPage {
         let csvContent = '';
         
         if (section.type === 'table') {
-            // Add headers
-            csvContent += section.columns.map(col => `"${col}"`).join(',') + '\n';
+            // Add headers with proper escaping
+            csvContent += section.columns.map(col => this.escapeCsvField(col)).join(',') + '\n';
             
-            // Add rows
+            // Add rows with proper escaping for memory values and asset names
             section.rows.forEach(row => {
-                csvContent += row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',') + '\n';
+                csvContent += row.map(cell => this.escapeCsvField(cell)).join(',') + '\n';
             });
         } else if (section.type === 'kv') {
+            // Add headers for key-value data
             csvContent += '"Name","Value"\n';
             section.items.forEach(item => {
                 const value = item.unit ? `${item.value} ${item.unit}` : item.value;
-                csvContent += `"${item.name}","${value}"\n`;
+                csvContent += `${this.escapeCsvField(item.name)},${this.escapeCsvField(value)}\n`;
             });
+        } else if (section.type === 'raw') {
+            // For raw sections, export as single column
+            csvContent += '"Content"\n';
+            if (section.rawLines) {
+                section.rawLines.forEach(line => {
+                    csvContent += `${this.escapeCsvField(line)}\n`;
+                });
+            }
         }
         
-        const blob = new Blob([csvContent], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = Utils.createElement('a');
-        a.href = url;
-        a.download = `${section.key}_data.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        // Create filename with timestamp for uniqueness
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const filename = `${section.key}_${timestamp}.csv`;
         
+        this.downloadFile(csvContent, filename, 'text/csv');
         Utils.showSuccessToast('Section exported as CSV');
     }
 
     // Export section as JSON
     exportSectionAsJSON(section) {
+        // Get current memreport metadata
+        const memreportState = this.appState.getState().memreport;
+        const currentFilters = memreportState.ui.sectionFilters[section.key] || {};
+        const currentSort = memreportState.ui.sectionSorts[section.key] || {};
+        
+        // Build comprehensive JSON structure
         const jsonData = {
-            title: section.title,
-            type: section.type,
-            data: section.type === 'table' ? {
-                columns: section.columns,
-                rows: section.rows
-            } : section.items || section.rawLines
+            metadata: {
+                exportTimestamp: new Date().toISOString(),
+                sectionKey: section.key,
+                sectionTitle: section.title,
+                sectionType: section.type,
+                memreportMeta: memreportState.meta,
+                appliedFilters: currentFilters,
+                appliedSort: currentSort,
+                totalRows: section.type === 'table' ? section.rows.length : 
+                          section.type === 'kv' ? section.items?.length || 0 : 
+                          section.rawLines?.length || 0
+            },
+            section: {
+                key: section.key,
+                title: section.title,
+                type: section.type,
+                data: this.getStructuredSectionData(section),
+                notes: section.notes || null,
+                error: section.error || null
+            }
         };
         
         const jsonContent = JSON.stringify(jsonData, null, 2);
-        const blob = new Blob([jsonContent], { type: 'application/json' });
+        
+        // Create filename with timestamp for uniqueness
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const filename = `${section.key}_${timestamp}.json`;
+        
+        this.downloadFile(jsonContent, filename, 'application/json');
+        Utils.showSuccessToast('Section exported as JSON');
+    }
+
+    // Helper method to escape CSV fields properly
+    escapeCsvField(value) {
+        if (value === null || value === undefined) {
+            return '""';
+        }
+        
+        const stringValue = String(value);
+        
+        // Check if field contains special characters that require quoting
+        const needsQuoting = /[",\r\n]/.test(stringValue);
+        
+        if (needsQuoting) {
+            // Escape existing quotes by doubling them and wrap in quotes
+            return `"${stringValue.replace(/"/g, '""')}"`;
+        }
+        
+        // For memory values and asset names, always quote to preserve formatting
+        if (this.isMemoryValue(stringValue) || this.isAssetName(stringValue)) {
+            return `"${stringValue.replace(/"/g, '""')}"`;
+        }
+        
+        return stringValue;
+    }
+    
+    // Check if value appears to be a memory value
+    isMemoryValue(value) {
+        return /^\d+(\.\d+)?\s*(KB|MB|GB|Bytes?)$/i.test(value) || 
+               /^\d+$/.test(value); // Pure numbers might be memory values
+    }
+    
+    // Check if value appears to be an asset name (contains paths or special chars)
+    isAssetName(value) {
+        return /[\/\\.]/.test(value) || // Contains path separators or dots
+               /^[A-Z][a-zA-Z0-9_]*$/.test(value); // Looks like a class/asset name
+    }
+    
+    // Get structured data for JSON export based on section type
+    getStructuredSectionData(section) {
+        switch (section.type) {
+            case 'table':
+                return {
+                    columns: section.columns || [],
+                    rows: section.rows || [],
+                    rowCount: section.rows ? section.rows.length : 0
+                };
+            case 'kv':
+                return {
+                    items: section.items || [],
+                    itemCount: section.items ? section.items.length : 0
+                };
+            case 'raw':
+            default:
+                return {
+                    rawLines: section.rawLines || [],
+                    lineCount: section.rawLines ? section.rawLines.length : 0
+                };
+        }
+    }
+    
+    // Generic file download helper
+    downloadFile(content, filename, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
         const url = URL.createObjectURL(blob);
         const a = Utils.createElement('a');
         a.href = url;
-        a.download = `${section.key}_data.json`;
+        a.download = filename;
+        a.style.display = 'none';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        
-        Utils.showSuccessToast('Section exported as JSON');
     }
 
     // Update section table after filter/sort changes
