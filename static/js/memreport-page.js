@@ -31,6 +31,227 @@ class MemReportPage {
         }
     }
 
+    // Parse and render MemReport file with progress indication
+    async parseAndRender(file) {
+        const container = document.getElementById('logContent');
+        if (!container) {
+            console.error('MemReport container not found');
+            return;
+        }
+
+        try {
+            // Show initial progress
+            this.showProgressIndicator(container);
+            
+            // Read file content
+            const fileContent = await this.readFileContent(file);
+            const fileSize = file.size;
+            
+            // Determine if we need chunked parsing
+            const shouldUseChunkedParsing = fileSize > (1024 * 1024); // 1MB threshold
+            
+            let memreportData;
+            if (shouldUseChunkedParsing) {
+                // Use chunked parsing with progress updates
+                memreportData = await MemReportParser.parse(fileContent, {
+                    chunkThreshold: 1024 * 1024, // 1MB
+                    chunkSize: 1000 // lines per chunk
+                }, (progress) => {
+                    this.updateProgressIndicator(progress);
+                });
+            } else {
+                // Use synchronous parsing for smaller files
+                this.updateProgressIndicator({ 
+                    phase: 'parsing', 
+                    progress: 50, 
+                    message: 'Parsing file...' 
+                });
+                
+                memreportData = await MemReportParser.parse(fileContent);
+                
+                this.updateProgressIndicator({ 
+                    phase: 'complete', 
+                    progress: 100, 
+                    message: 'Parsing complete!' 
+                });
+            }
+
+            // Store in app state
+            this.appState.setMemReportData(memreportData);
+            
+            // Render the parsed data
+            this.render(memreportData);
+            
+        } catch (error) {
+            console.error('Error parsing MemReport file:', error);
+            this.showParsingError(container, error.message);
+        }
+    }
+
+    // Read file content as text
+    readFileContent(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = (e) => reject(new Error('Failed to read file'));
+            reader.readAsText(file);
+        });
+    }
+
+    // Show non-blocking progress indicator
+    showProgressIndicator(container) {
+        container.innerHTML = '';
+        
+        const progressContainer = Utils.createElement('div', 'memreport-progress-container d-flex flex-column align-items-center justify-content-center', {
+            style: 'min-height: 300px;'
+        });
+        
+        // Progress card
+        const progressCard = Utils.createElement('div', 'card border-primary', {
+            style: 'max-width: 500px; width: 100%;'
+        });
+        
+        const cardHeader = Utils.createElement('div', 'card-header bg-primary text-white');
+        const headerTitle = Utils.createElement('h5', 'mb-0');
+        headerTitle.textContent = 'Processing MemReport File';
+        cardHeader.appendChild(headerTitle);
+        
+        const cardBody = Utils.createElement('div', 'card-body');
+        
+        // Progress bar
+        const progressWrapper = Utils.createElement('div', 'progress mb-3', {
+            style: 'height: 20px;'
+        });
+        
+        const progressBar = Utils.createElement('div', 'progress-bar progress-bar-striped progress-bar-animated', {
+            id: 'memreport-progress-bar',
+            role: 'progressbar',
+            'aria-valuenow': '0',
+            'aria-valuemin': '0',
+            'aria-valuemax': '100',
+            style: 'width: 0%;'
+        });
+        
+        progressWrapper.appendChild(progressBar);
+        
+        // Status message
+        const statusMessage = Utils.createElement('div', 'text-center text-muted', {
+            id: 'memreport-progress-message'
+        });
+        statusMessage.textContent = 'Initializing...';
+        
+        // Phase indicator
+        const phaseIndicator = Utils.createElement('div', 'text-center mt-2', {
+            id: 'memreport-progress-phase'
+        });
+        
+        cardBody.appendChild(progressWrapper);
+        cardBody.appendChild(statusMessage);
+        cardBody.appendChild(phaseIndicator);
+        
+        progressCard.appendChild(cardHeader);
+        progressCard.appendChild(cardBody);
+        progressContainer.appendChild(progressCard);
+        
+        container.appendChild(progressContainer);
+    }
+
+    // Update progress indicator
+    updateProgressIndicator(progress) {
+        const progressBar = document.getElementById('memreport-progress-bar');
+        const statusMessage = document.getElementById('memreport-progress-message');
+        const phaseIndicator = document.getElementById('memreport-progress-phase');
+        
+        if (progressBar && statusMessage && phaseIndicator) {
+            // Update progress bar
+            const percentage = Math.round(progress.progress);
+            progressBar.style.width = `${percentage}%`;
+            progressBar.setAttribute('aria-valuenow', percentage.toString());
+            progressBar.textContent = `${percentage}%`;
+            
+            // Update status message
+            statusMessage.textContent = progress.message || 'Processing...';
+            
+            // Update phase indicator
+            const phaseLabels = {
+                'initializing': '🔄 Initializing',
+                'metadata': '📋 Reading Metadata',
+                'detecting': '🔍 Detecting Sections',
+                'parsing': '⚙️ Parsing Data',
+                'complete': '✅ Complete',
+                'error': '❌ Error'
+            };
+            
+            phaseIndicator.textContent = phaseLabels[progress.phase] || '⚙️ Processing';
+            
+            // Add completion styling
+            if (progress.phase === 'complete') {
+                progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+                progressBar.classList.add('bg-success');
+                
+                // Auto-hide after a short delay
+                setTimeout(() => {
+                    const progressContainer = document.querySelector('.memreport-progress-container');
+                    if (progressContainer) {
+                        progressContainer.style.opacity = '0';
+                        progressContainer.style.transition = 'opacity 0.5s ease-out';
+                        setTimeout(() => {
+                            if (progressContainer.parentNode) {
+                                progressContainer.parentNode.removeChild(progressContainer);
+                            }
+                        }, 500);
+                    }
+                }, 1000);
+            }
+            
+            // Error styling
+            if (progress.phase === 'error') {
+                progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+                progressBar.classList.add('bg-danger');
+            }
+        }
+    }
+
+    // Show parsing error
+    showParsingError(container, errorMessage) {
+        container.innerHTML = '';
+        
+        const errorContainer = Utils.createElement('div', 'd-flex flex-column align-items-center justify-content-center', {
+            style: 'min-height: 300px;'
+        });
+        
+        const errorCard = Utils.createElement('div', 'card border-danger', {
+            style: 'max-width: 500px; width: 100%;'
+        });
+        
+        const cardHeader = Utils.createElement('div', 'card-header bg-danger text-white');
+        const headerTitle = Utils.createElement('h5', 'mb-0');
+        headerTitle.textContent = 'Parsing Error';
+        cardHeader.appendChild(headerTitle);
+        
+        const cardBody = Utils.createElement('div', 'card-body');
+        const errorText = Utils.createElement('p', 'text-danger');
+        errorText.textContent = errorMessage;
+        
+        const retryButton = Utils.createElement('button', 'btn btn-primary');
+        retryButton.textContent = 'Try Another File';
+        retryButton.addEventListener('click', () => {
+            // Trigger file input
+            const fileInput = document.getElementById('logFile');
+            if (fileInput) {
+                fileInput.click();
+            }
+        });
+        
+        cardBody.appendChild(errorText);
+        cardBody.appendChild(retryButton);
+        errorCard.appendChild(cardHeader);
+        errorCard.appendChild(cardBody);
+        errorContainer.appendChild(errorCard);
+        
+        container.appendChild(errorContainer);
+    }
+
     // Main render method - renders the entire MemReport page
     render(memreportData) {
         const container = document.getElementById('logContent');
@@ -272,6 +493,12 @@ class MemReportPage {
     renderTableSection(section) {
         const tableContainer = Utils.createElement('div', 'table-section');
         
+        // Add large table indicator if needed
+        if (section.rows && section.rows.length > 500) {
+            const indicator = this.createLargeTableIndicator(section.rows.length);
+            tableContainer.appendChild(indicator);
+        }
+        
         // Add search input if section has search enabled
         const filters = this.appState.getState().memreport.ui.sectionFilters[section.key];
         if (filters && filters.searchVisible) {
@@ -294,6 +521,25 @@ class MemReportPage {
         table.render();
         
         return tableContainer;
+    }
+
+    // Create large table indicator
+    createLargeTableIndicator(rowCount) {
+        const indicator = Utils.createElement('div', 'large-table-indicator d-flex justify-content-between align-items-center');
+        
+        const message = Utils.createElement('span');
+        message.innerHTML = `
+            <strong>Large Table:</strong> This section contains ${Utils.formatNumber(rowCount)} rows. 
+            Virtual scrolling is enabled for optimal performance.
+        `;
+        
+        const badge = Utils.createElement('span', 'badge bg-info');
+        badge.textContent = 'Virtual Scrolling';
+        
+        indicator.appendChild(message);
+        indicator.appendChild(badge);
+        
+        return indicator;
     }
 
     // Render key-value section
@@ -683,6 +929,15 @@ class MemReportPage {
 
     // Cleanup method
     cleanup() {
+        // Clean up virtual scrolling event listeners
+        this.tables.forEach(table => {
+            if (table.virtualScrollElements && table.virtualScrollElements.container) {
+                // Remove scroll event listeners
+                const container = table.virtualScrollElements.container;
+                container.removeEventListener('scroll', table.handleVirtualScroll);
+            }
+        });
+        
         this.tables.clear();
     }
 }
@@ -785,7 +1040,7 @@ class MemReportTable {
         return thead;
     }
 
-    // Create table body with data rows
+    // Create table body with data rows (with virtual scrolling for large tables)
     createTableBody() {
         const tbody = Utils.createElement('tbody');
         
@@ -800,35 +1055,234 @@ class MemReportTable {
             return tbody;
         }
         
-        // Use DocumentFragment for performance
+        // Check if we need virtual scrolling (>500 rows)
+        const shouldUseVirtualScrolling = this.currentData.rows.length > 500;
+        
+        if (shouldUseVirtualScrolling) {
+            return this.createVirtualScrollTableBody();
+        } else {
+            return this.createStandardTableBody();
+        }
+    }
+
+    // Create standard table body for smaller tables
+    createStandardTableBody() {
+        const tbody = Utils.createElement('tbody');
+        
+        // Use DocumentFragment for batched DOM updates
         const fragment = document.createDocumentFragment();
         
         this.currentData.rows.forEach((row, rowIndex) => {
-            const tr = Utils.createElement('tr', '', {
-                role: 'row',
-                tabindex: '0'
-            });
-            
-            row.forEach((cell, cellIndex) => {
-                const td = Utils.createElement('td', '', { role: 'cell' });
-                
-                // Format cell content based on column type
-                const formattedContent = this.formatCellContent(cell, this.currentData.columns[cellIndex]);
-                
-                if (typeof formattedContent === 'string') {
-                    td.textContent = formattedContent;
-                } else {
-                    td.appendChild(formattedContent);
-                }
-                
-                tr.appendChild(td);
-            });
-            
+            const tr = this.createTableRow(row, rowIndex);
             fragment.appendChild(tr);
         });
         
         tbody.appendChild(fragment);
         return tbody;
+    }
+
+    // Create virtual scrolling table body for large tables
+    createVirtualScrollTableBody() {
+        const tbody = Utils.createElement('tbody', 'virtual-scroll-tbody');
+        
+        // Initialize virtual scrolling
+        this.initializeVirtualScrolling(tbody);
+        
+        return tbody;
+    }
+
+    // Initialize virtual scrolling system
+    initializeVirtualScrolling(tbody) {
+        const rowHeight = 35; // Estimated row height in pixels
+        const containerHeight = 400; // Max visible height
+        const visibleRows = Math.ceil(containerHeight / rowHeight);
+        const bufferRows = Math.ceil(visibleRows * 0.5); // 50% buffer
+        
+        this.virtualScrollConfig = {
+            rowHeight,
+            containerHeight,
+            visibleRows,
+            bufferRows,
+            totalRows: this.currentData.rows.length,
+            startIndex: 0,
+            endIndex: Math.min(visibleRows + bufferRows, this.currentData.rows.length)
+        };
+        
+        // Create virtual scroll container
+        const scrollContainer = Utils.createElement('div', 'virtual-scroll-container', {
+            style: `height: ${containerHeight}px; overflow-y: auto; position: relative;`
+        });
+        
+        // Create spacer elements for virtual scrolling
+        const topSpacer = Utils.createElement('div', 'virtual-scroll-spacer-top', {
+            style: 'height: 0px;'
+        });
+        
+        const bottomSpacer = Utils.createElement('div', 'virtual-scroll-spacer-bottom', {
+            style: `height: ${(this.virtualScrollConfig.totalRows - this.virtualScrollConfig.endIndex) * rowHeight}px;`
+        });
+        
+        // Create visible rows container
+        const visibleRowsContainer = Utils.createElement('div', 'virtual-scroll-visible-rows');
+        
+        // Store references
+        this.virtualScrollElements = {
+            container: scrollContainer,
+            topSpacer,
+            bottomSpacer,
+            visibleRowsContainer,
+            tbody
+        };
+        
+        // Render initial visible rows
+        this.renderVirtualScrollRows();
+        
+        // Setup scroll event listener with throttling
+        let scrollTimeout;
+        scrollContainer.addEventListener('scroll', () => {
+            if (scrollTimeout) {
+                clearTimeout(scrollTimeout);
+            }
+            
+            scrollTimeout = setTimeout(() => {
+                this.handleVirtualScroll();
+            }, 16); // ~60fps
+        });
+        
+        // Assemble virtual scroll structure
+        visibleRowsContainer.appendChild(topSpacer);
+        
+        // Create table structure within visible container
+        const virtualTable = Utils.createElement('table', 'table table-striped table-hover memreport-data-table virtual-scroll-table');
+        const virtualTbody = Utils.createElement('tbody');
+        
+        virtualTable.appendChild(virtualTbody);
+        visibleRowsContainer.appendChild(virtualTable);
+        visibleRowsContainer.appendChild(bottomSpacer);
+        
+        scrollContainer.appendChild(visibleRowsContainer);
+        
+        // Replace the original tbody with our virtual scroll container
+        tbody.appendChild(scrollContainer);
+        
+        // Store reference to virtual tbody for updates
+        this.virtualTbody = virtualTbody;
+        
+        return tbody;
+    }
+
+    // Render visible rows for virtual scrolling
+    renderVirtualScrollRows() {
+        if (!this.virtualTbody || !this.virtualScrollConfig) return;
+        
+        const { startIndex, endIndex } = this.virtualScrollConfig;
+        const fragment = document.createDocumentFragment();
+        
+        // Clear existing rows
+        this.virtualTbody.innerHTML = '';
+        
+        // Render visible rows using idle callbacks for better performance
+        this.renderRowsProgressively(startIndex, endIndex, fragment, () => {
+            this.virtualTbody.appendChild(fragment);
+        });
+    }
+
+    // Render rows progressively using requestIdleCallback
+    renderRowsProgressively(startIndex, endIndex, fragment, callback) {
+        const batchSize = 50; // Rows to render per batch
+        let currentIndex = startIndex;
+        
+        const renderBatch = () => {
+            const batchEnd = Math.min(currentIndex + batchSize, endIndex);
+            
+            // Render batch of rows
+            for (let i = currentIndex; i < batchEnd; i++) {
+                if (i < this.currentData.rows.length) {
+                    const tr = this.createTableRow(this.currentData.rows[i], i);
+                    fragment.appendChild(tr);
+                }
+            }
+            
+            currentIndex = batchEnd;
+            
+            // Continue with next batch or finish
+            if (currentIndex < endIndex) {
+                if (typeof requestIdleCallback !== 'undefined') {
+                    requestIdleCallback(renderBatch, { timeout: 50 });
+                } else {
+                    setTimeout(renderBatch, 0);
+                }
+            } else {
+                callback();
+            }
+        };
+        
+        renderBatch();
+    }
+
+    // Handle virtual scroll events
+    handleVirtualScroll() {
+        if (!this.virtualScrollElements || !this.virtualScrollConfig) return;
+        
+        const { container } = this.virtualScrollElements;
+        const { rowHeight, visibleRows, bufferRows, totalRows } = this.virtualScrollConfig;
+        
+        const scrollTop = container.scrollTop;
+        const newStartIndex = Math.floor(scrollTop / rowHeight);
+        const newEndIndex = Math.min(newStartIndex + visibleRows + (bufferRows * 2), totalRows);
+        
+        // Only update if the visible range has changed significantly
+        const threshold = Math.floor(bufferRows / 2);
+        if (Math.abs(newStartIndex - this.virtualScrollConfig.startIndex) > threshold) {
+            this.virtualScrollConfig.startIndex = Math.max(0, newStartIndex - bufferRows);
+            this.virtualScrollConfig.endIndex = newEndIndex;
+            
+            // Update spacers
+            this.updateVirtualScrollSpacers();
+            
+            // Re-render visible rows
+            this.renderVirtualScrollRows();
+        }
+    }
+
+    // Update virtual scroll spacers
+    updateVirtualScrollSpacers() {
+        if (!this.virtualScrollElements || !this.virtualScrollConfig) return;
+        
+        const { topSpacer, bottomSpacer } = this.virtualScrollElements;
+        const { startIndex, endIndex, totalRows, rowHeight } = this.virtualScrollConfig;
+        
+        // Update top spacer height
+        topSpacer.style.height = `${startIndex * rowHeight}px`;
+        
+        // Update bottom spacer height
+        bottomSpacer.style.height = `${(totalRows - endIndex) * rowHeight}px`;
+    }
+
+    // Create a single table row
+    createTableRow(row, rowIndex) {
+        const tr = Utils.createElement('tr', '', {
+            role: 'row',
+            tabindex: '0',
+            'data-row-index': rowIndex.toString()
+        });
+        
+        row.forEach((cell, cellIndex) => {
+            const td = Utils.createElement('td', '', { role: 'cell' });
+            
+            // Format cell content based on column type
+            const formattedContent = this.formatCellContent(cell, this.currentData.columns[cellIndex]);
+            
+            if (typeof formattedContent === 'string') {
+                td.textContent = formattedContent;
+            } else {
+                td.appendChild(formattedContent);
+            }
+            
+            tr.appendChild(td);
+        });
+        
+        return tr;
     }
 
     // Format cell content based on column type
@@ -923,11 +1377,34 @@ class MemReportTable {
     updateData(newSectionData) {
         this.currentData = newSectionData;
         
-        // Re-render only the body for performance
-        const tbody = this.tableElement.querySelector('tbody');
-        if (tbody) {
-            const newTbody = this.createTableBody();
-            this.tableElement.replaceChild(newTbody, tbody);
+        // Check if we need to switch between virtual and standard scrolling
+        const wasVirtual = this.virtualScrollConfig !== undefined;
+        const shouldBeVirtual = this.currentData.rows.length > 500;
+        
+        if (wasVirtual !== shouldBeVirtual) {
+            // Need to completely re-render the table
+            this.render();
+            return;
+        }
+        
+        if (shouldBeVirtual && this.virtualScrollConfig) {
+            // Update virtual scrolling configuration
+            this.virtualScrollConfig.totalRows = this.currentData.rows.length;
+            this.virtualScrollConfig.endIndex = Math.min(
+                this.virtualScrollConfig.startIndex + this.virtualScrollConfig.visibleRows + this.virtualScrollConfig.bufferRows,
+                this.virtualScrollConfig.totalRows
+            );
+            
+            // Update spacers and re-render visible rows
+            this.updateVirtualScrollSpacers();
+            this.renderVirtualScrollRows();
+        } else {
+            // Standard table update
+            const tbody = this.tableElement.querySelector('tbody');
+            if (tbody) {
+                const newTbody = this.createTableBody();
+                this.tableElement.replaceChild(newTbody, tbody);
+            }
         }
         
         // Update header sort indicators
@@ -1063,6 +1540,41 @@ class MemReportTable {
     // Get total row count (unfiltered)
     getTotalRowCount() {
         return this.originalData.rows ? this.originalData.rows.length : 0;
+    }
+
+    // Cleanup virtual scrolling resources
+    cleanup() {
+        if (this.virtualScrollElements && this.virtualScrollElements.container) {
+            // Remove scroll event listeners
+            const container = this.virtualScrollElements.container;
+            const scrollHandler = this.handleVirtualScroll.bind(this);
+            container.removeEventListener('scroll', scrollHandler);
+        }
+        
+        // Clear virtual scroll references
+        this.virtualScrollConfig = null;
+        this.virtualScrollElements = null;
+        this.virtualTbody = null;
+    }
+
+    // Check if table is using virtual scrolling
+    isVirtualScrolling() {
+        return this.virtualScrollConfig !== undefined;
+    }
+
+    // Get virtual scroll statistics
+    getVirtualScrollStats() {
+        if (!this.virtualScrollConfig) {
+            return null;
+        }
+        
+        return {
+            totalRows: this.virtualScrollConfig.totalRows,
+            visibleRows: this.virtualScrollConfig.visibleRows,
+            startIndex: this.virtualScrollConfig.startIndex,
+            endIndex: this.virtualScrollConfig.endIndex,
+            renderedRows: this.virtualScrollConfig.endIndex - this.virtualScrollConfig.startIndex
+        };
     }
 }
 

@@ -20,9 +20,27 @@ class MemReportParser {
     /**
      * Main parsing entry point
      * @param {string} fileContent - Raw memreport file content
+     * @param {Object} options - Parsing options
+     * @param {Function} progressCallback - Optional progress callback for chunked parsing
+     * @returns {Promise<Object>} Parsed memreport data with meta and sections
+     */
+    static async parse(fileContent, options = {}, progressCallback = null) {
+        const fileSize = new Blob([fileContent]).size;
+        const shouldUseChunkedParsing = fileSize > (options.chunkThreshold || 1024 * 1024); // 1MB default
+        
+        if (shouldUseChunkedParsing && progressCallback) {
+            return this.parseChunked(fileContent, options, progressCallback);
+        } else {
+            return this.parseSync(fileContent);
+        }
+    }
+
+    /**
+     * Synchronous parsing for smaller files
+     * @param {string} fileContent - Raw memreport file content
      * @returns {Object} Parsed memreport data with meta and sections
      */
-    static parse(fileContent) {
+    static parseSync(fileContent) {
         try {
             const lines = fileContent.split('\n').map(line => line.trim());
             const sections = [];
@@ -69,6 +87,213 @@ class MemReportParser {
                 parseErrors: [error]
             };
         }
+    }
+
+    /**
+     * Chunked parsing for large files using requestIdleCallback
+     * @param {string} fileContent - Raw memreport file content
+     * @param {Object} options - Parsing options
+     * @param {Function} progressCallback - Progress callback function
+     * @returns {Promise<Object>} Parsed memreport data with meta and sections
+     */
+    static async parseChunked(fileContent, options = {}, progressCallback) {
+        const chunkSize = options.chunkSize || 1000; // Lines per chunk
+        const lines = fileContent.split('\n').map(line => line.trim());
+        const totalLines = lines.length;
+        
+        try {
+            // Report initial progress
+            progressCallback({ 
+                phase: 'initializing', 
+                progress: 0, 
+                message: 'Preparing to parse large file...' 
+            });
+
+            // Extract metadata from the beginning (synchronously for quick feedback)
+            const meta = this.extractMeta(lines.slice(0, 100));
+            
+            progressCallback({ 
+                phase: 'metadata', 
+                progress: 5, 
+                message: 'Extracted file metadata' 
+            });
+
+            // Detect sections in chunks
+            progressCallback({ 
+                phase: 'detecting', 
+                progress: 10, 
+                message: 'Detecting sections...' 
+            });
+            
+            const sectionData = await this.detectSectionsChunked(lines, chunkSize, (progress) => {
+                progressCallback({
+                    phase: 'detecting',
+                    progress: 10 + (progress * 0.3), // 10-40% for section detection
+                    message: `Detecting sections... ${Math.round(progress)}%`
+                });
+            });
+
+            progressCallback({ 
+                phase: 'parsing', 
+                progress: 40, 
+                message: `Found ${sectionData.length} sections, parsing...` 
+            });
+
+            // Parse sections incrementally
+            const sections = [];
+            let parseErrors = [];
+            
+            for (let i = 0; i < sectionData.length; i++) {
+                const section = sectionData[i];
+                const sectionProgress = (i / sectionData.length) * 60; // 40-100% for parsing
+                
+                progressCallback({
+                    phase: 'parsing',
+                    progress: 40 + sectionProgress,
+                    message: `Parsing section: ${section.title || 'Unknown'}`
+                });
+
+                try {
+                    // Parse section with idle callback to maintain responsiveness
+                    const parsed = await this.parseSectionAsync(section);
+                    sections.push(parsed);
+                } catch (error) {
+                    // Add as raw section with error note
+                    sections.push({
+                        key: `unknown_${sections.length}`,
+                        title: section.title || 'Unknown Section',
+                        type: 'raw',
+                        rawLines: section.lines,
+                        error: error.message
+                    });
+                    parseErrors.push(error);
+                }
+
+                // Yield control to browser if needed
+                if (i % 5 === 0) { // Every 5 sections
+                    await this.yieldToMain();
+                }
+            }
+
+            progressCallback({ 
+                phase: 'complete', 
+                progress: 100, 
+                message: `Parsing complete! ${sections.length} sections processed` 
+            });
+
+            return {
+                meta,
+                sections,
+                parseErrors
+            };
+
+        } catch (error) {
+            progressCallback({ 
+                phase: 'error', 
+                progress: 100, 
+                message: `Parsing failed: ${error.message}` 
+            });
+
+            // Complete parsing failure - return raw fallback
+            return {
+                meta: { generator: 'memreport', error: error.message },
+                sections: [{
+                    key: 'raw_fallback',
+                    title: 'Raw Content',
+                    type: 'raw',
+                    rawLines: fileContent.split('\n')
+                }],
+                parseErrors: [error]
+            };
+        }
+    }
+
+    /**
+     * Detect sections in chunks to maintain UI responsiveness
+     * @param {string[]} lines - Array of file lines
+     * @param {number} chunkSize - Lines to process per chunk
+     * @param {Function} progressCallback - Progress callback
+     * @returns {Promise<Array>} Array of section objects
+     */
+    static async detectSectionsChunked(lines, chunkSize, progressCallback) {
+        const sections = [];
+        let currentSection = null;
+        let processedLines = 0;
+        const totalLines = lines.length;
+
+        for (let i = 0; i < lines.length; i += chunkSize) {
+            const chunk = lines.slice(i, Math.min(i + chunkSize, lines.length));
+            
+            // Process chunk
+            for (let j = 0; j < chunk.length; j++) {
+                const line = chunk[j];
+                const globalIndex = i + j;
+                
+                if (this.isSectionHeader(line)) {
+                    // Save previous section if exists
+                    if (currentSection && currentSection.lines.length > 0) {
+                        sections.push(currentSection);
+                    }
+                    
+                    // Start new section
+                    currentSection = {
+                        title: this.extractSectionTitle(line),
+                        lines: [],
+                        startLine: globalIndex
+                    };
+                } else if (currentSection && line.length > 0) {
+                    // Add non-empty lines to current section
+                    currentSection.lines.push(line);
+                }
+            }
+
+            processedLines += chunk.length;
+            const progress = (processedLines / totalLines) * 100;
+            progressCallback(progress);
+
+            // Yield control to browser
+            await this.yieldToMain();
+        }
+
+        // Don't forget the last section
+        if (currentSection && currentSection.lines.length > 0) {
+            sections.push(currentSection);
+        }
+
+        return sections;
+    }
+
+    /**
+     * Parse a section asynchronously to maintain UI responsiveness
+     * @param {Object} sectionData - Raw section data
+     * @returns {Promise<Object>} Parsed section object
+     */
+    static async parseSectionAsync(sectionData) {
+        // For very large sections, we might want to yield during parsing
+        const isLargeSection = sectionData.lines.length > 1000;
+        
+        if (isLargeSection) {
+            // Yield before processing large section
+            await this.yieldToMain();
+        }
+
+        // Use existing synchronous parsing logic
+        return this.parseSection(sectionData);
+    }
+
+    /**
+     * Yield control to the main thread using requestIdleCallback or setTimeout
+     * @returns {Promise<void>}
+     */
+    static yieldToMain() {
+        return new Promise(resolve => {
+            if (typeof requestIdleCallback !== 'undefined') {
+                requestIdleCallback(resolve, { timeout: 50 });
+            } else {
+                // Fallback for browsers without requestIdleCallback
+                setTimeout(resolve, 0);
+            }
+        });
     }
 
     /**
