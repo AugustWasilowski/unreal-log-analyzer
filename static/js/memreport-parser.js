@@ -684,7 +684,24 @@ class MemReportParser {
         }
         
         if (/(Platform Memory Stats|Memory Stats|Allocator Stats)/i.test(title)) {
-            return 'kv'; // Memory stats are key-value
+            // Memory stats can be mixed format - analyze the content
+            const kvLines = lines.filter(line => 
+                line.includes('=') || 
+                /^[A-Za-z][A-Za-z\s]+\s+\d+(\.\d+)?\s*(MB|KB|GB|bytes?)\s*$/i.test(line)
+            );
+            
+            const tabularLines = lines.filter(line => 
+                /^\s*\d+\.\d+MB\s+\-/.test(line) || // Format: "0.000MB - Name - ..."
+                /^\s*\d+\.\d+\s*MB\s+\-/.test(line) // Format with spaces
+            );
+            
+            // If more than 60% of lines are tabular, treat as table
+            if (tabularLines.length > lines.length * 0.6) {
+                return 'table';
+            }
+            
+            // Otherwise treat as key-value
+            return 'kv';
         }
 
         // Look for table patterns - multiple columns with consistent spacing
@@ -858,6 +875,10 @@ class MemReportParser {
         
         if (/Render Targets/i.test(title)) {
             return this.parseRenderTargetTable(lines, title);
+        }
+        
+        if (/(Memory Stats|Allocator Stats)/i.test(title)) {
+            return this.parseMemoryStatsTable(lines, title);
         }
 
         // Standard table parsing
@@ -1257,6 +1278,128 @@ class MemReportParser {
             default:
                 return numValue;
         }
+    }
+
+    /**
+     * Parse Memory Stats table with mixed key-value and tabular data
+     * @param {string[]} lines - Section lines
+     * @param {string} title - Section title
+     * @returns {Object} Parsed table data
+     */
+    static parseMemoryStatsTable(lines, title) {
+        if (!lines || lines.length === 0) {
+            throw new Error('Memory Stats section is empty or undefined');
+        }
+
+        // Separate key-value lines from tabular lines
+        const kvLines = [];
+        const tabularLines = [];
+        
+        for (const line of lines) {
+            if (line.trim().length === 0) continue;
+            
+            // Check if it's a tabular line (format: "0.000MB - Name - ...")
+            if (/^\s*\d+\.\d+\s*MB\s+\-/.test(line)) {
+                tabularLines.push(line);
+            } 
+            // Check if it's a key-value line (contains = or ends with memory unit)
+            else if (line.includes('=') || /^[A-Za-z][A-Za-z\s]+\s+\d+(\.\d+)?\s*(MB|KB|GB|bytes?)\s*$/i.test(line)) {
+                kvLines.push(line);
+            }
+            // If it doesn't match either pattern, treat as tabular for now
+            else {
+                tabularLines.push(line);
+            }
+        }
+
+        // If we have mostly tabular data, parse as table
+        if (tabularLines.length > kvLines.length) {
+            const columns = [
+                { name: 'Memory (MB)', type: 'memory' },
+                { name: 'Name', type: 'string' },
+                { name: 'Stat Name', type: 'string' },
+                { name: 'Group', type: 'string' },
+                { name: 'Category', type: 'string' }
+            ];
+            
+            const rows = [];
+            const rowErrors = [];
+            
+            for (let i = 0; i < tabularLines.length; i++) {
+                const line = tabularLines[i];
+                try {
+                    const row = this.parseMemoryStatsRow(line);
+                    if (row && row.length > 0) {
+                        rows.push(row);
+                    }
+                } catch (rowError) {
+                    rowErrors.push({
+                        lineNumber: i + 1,
+                        line: line,
+                        error: rowError.message
+                    });
+                }
+            }
+            
+            // Add key-value data as additional rows if any
+            for (const kvLine of kvLines) {
+                try {
+                    const kvPair = this.parseKeyValueLine(kvLine);
+                    if (kvPair) {
+                        // Convert key-value to table row format
+                        const kvRow = [kvPair.value, kvPair.name, '', '', ''];
+                        rows.push(kvRow);
+                    }
+                } catch (error) {
+                    // Ignore key-value parsing errors in table context
+                }
+            }
+            
+            return {
+                columns: columns.map(col => col.name),
+                rows: rows,
+                notes: `Parsed ${rows.length} memory statistics entries${rowErrors.length > 0 ? ` (${rowErrors.length} parsing errors)` : ''}`,
+                parseErrors: rowErrors.length > 0 ? rowErrors : undefined
+            };
+        } else {
+            // Fall back to key-value parsing if we have more KV lines
+            throw new Error('Memory Stats section appears to be key-value format, not tabular');
+        }
+    }
+
+    /**
+     * Parse a single Memory Stats row with dash separators
+     * @param {string} line - Line to parse (format: "0.000MB - Name - Stat - Group - Category")
+     * @returns {Array} Parsed row data
+     */
+    static parseMemoryStatsRow(line) {
+        // Split by " - " (dash with spaces)
+        const parts = line.trim().split(/\s+\-\s+/);
+        
+        if (parts.length < 2) {
+            // Try alternative parsing for lines that don't follow the dash format
+            const spaceParts = line.trim().split(/\s+/);
+            if (spaceParts.length >= 2) {
+                // First part should be memory value, rest is name/description
+                const memory = spaceParts[0];
+                const name = spaceParts.slice(1).join(' ');
+                return [memory, name, '', '', ''];
+            }
+            throw new Error('Line does not match expected Memory Stats format');
+        }
+        
+        // Extract memory value (first part)
+        const memoryPart = parts[0].trim();
+        const memoryMatch = memoryPart.match(/(\d+\.\d+)\s*MB/);
+        const memoryValue = memoryMatch ? memoryMatch[1] : memoryPart;
+        
+        // Extract other parts
+        const name = parts[1] ? parts[1].trim() : '';
+        const statName = parts[2] ? parts[2].trim() : '';
+        const group = parts[3] ? parts[3].trim() : '';
+        const category = parts[4] ? parts[4].trim() : '';
+        
+        return [memoryValue, name, statName, group, category];
     }
 
     /**

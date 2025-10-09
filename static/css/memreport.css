@@ -567,45 +567,13 @@
     }
 }
 
-/* Virtual scrolling styles */
-.virtual-scroll-container {
-    position: relative;
-    overflow-y: auto;
-    overflow-x: hidden;
-    border: 1px solid #444;
-    border-radius: 0.375rem;
-    background-color: #23272b;
-}
-
-.virtual-scroll-visible-rows {
-    position: relative;
-}
-
-.virtual-scroll-table {
-    margin-bottom: 0;
-}
-
-.virtual-scroll-tbody {
-    display: block;
-    width: 100%;
-}
-
-.virtual-scroll-spacer-top,
-.virtual-scroll-spacer-bottom {
-    width: 100%;
-    pointer-events: none;
-}
-
-/* Ensure virtual scroll table maintains proper styling */
-.virtual-scroll-table thead,
-.virtual-scroll-table tbody,
-.virtual-scroll-table tr {
-    display: table;
-    width: 100%;
+/* Standard table styling for all tables */
+.memreport-data-table {
+    width: 100% !important;
     table-layout: fixed;
 }
 
-.virtual-scroll-table thead {
+.memreport-data-table thead th {
     position: sticky;
     top: 0;
     z-index: 5;
@@ -613,8 +581,13 @@
     color: #e0e0e0;
 }
 
-.virtual-scroll-table {
-    color: #e0e0e0;
+.memreport-data-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0.5rem;
+    border-color: #444;
+    vertical-align: middle;
 }
 
 /* Performance optimizations for virtual scrolling */

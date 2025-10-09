@@ -904,7 +904,7 @@ class MemReportPage {
         const tableContainer = Utils.createElement('div', 'table-section');
         
         // Add large table indicator if needed
-        if (section.rows && section.rows.length > 500) {
+        if (section.rows && section.rows.length > 1000) {
             const indicator = this.createLargeTableIndicator(section.rows.length);
             tableContainer.appendChild(indicator);
         }
@@ -943,11 +943,11 @@ class MemReportPage {
         const message = Utils.createElement('span');
         message.innerHTML = `
             <strong>Large Table:</strong> This section contains ${Utils.formatNumber(rowCount)} rows. 
-            Virtual scrolling is enabled for optimal performance.
+            Use browser scrolling to navigate through the data.
         `;
         
         const badge = Utils.createElement('span', 'badge bg-info');
-        badge.textContent = 'Virtual Scrolling';
+        badge.textContent = 'Large Dataset';
         
         indicator.appendChild(message);
         indicator.appendChild(badge);
@@ -1968,15 +1968,7 @@ class MemReportPage {
 
     // Cleanup method
     cleanup() {
-        // Clean up virtual scrolling event listeners
-        this.tables.forEach(table => {
-            if (table.virtualScrollElements && table.virtualScrollElements.container) {
-                // Remove scroll event listeners
-                const container = table.virtualScrollElements.container;
-                container.removeEventListener('scroll', table.handleVirtualScroll);
-            }
-        });
-        
+        // Clear table instances
         this.tables.clear();
     }
 }
@@ -2092,7 +2084,7 @@ class MemReportTable {
         return thead;
     }
 
-    // Create table body with data rows (with virtual scrolling for large tables)
+    // Create table body with data rows
     createTableBody() {
         const tbody = Utils.createElement('tbody');
         
@@ -2107,20 +2099,6 @@ class MemReportTable {
             return tbody;
         }
         
-        // Check if we need virtual scrolling (>500 rows)
-        const shouldUseVirtualScrolling = this.currentData.rows.length > 500;
-        
-        if (shouldUseVirtualScrolling) {
-            return this.createVirtualScrollTableBody();
-        } else {
-            return this.createStandardTableBody();
-        }
-    }
-
-    // Create standard table body for smaller tables
-    createStandardTableBody() {
-        const tbody = Utils.createElement('tbody');
-        
         // Use DocumentFragment for batched DOM updates
         const fragment = document.createDocumentFragment();
         
@@ -2133,183 +2111,9 @@ class MemReportTable {
         return tbody;
     }
 
-    // Create virtual scrolling table body for large tables
-    createVirtualScrollTableBody() {
-        const tbody = Utils.createElement('tbody', 'virtual-scroll-tbody');
-        
-        // Initialize virtual scrolling
-        this.initializeVirtualScrolling(tbody);
-        
-        return tbody;
-    }
 
-    // Initialize virtual scrolling system
-    initializeVirtualScrolling(tbody) {
-        const rowHeight = 35; // Estimated row height in pixels
-        const containerHeight = 400; // Max visible height
-        const visibleRows = Math.ceil(containerHeight / rowHeight);
-        const bufferRows = Math.ceil(visibleRows * 0.5); // 50% buffer
-        
-        this.virtualScrollConfig = {
-            rowHeight,
-            containerHeight,
-            visibleRows,
-            bufferRows,
-            totalRows: this.currentData.rows.length,
-            startIndex: 0,
-            endIndex: Math.min(visibleRows + bufferRows, this.currentData.rows.length)
-        };
-        
-        // Create virtual scroll container
-        const scrollContainer = Utils.createElement('div', 'virtual-scroll-container', {
-            style: `height: ${containerHeight}px; overflow-y: auto; position: relative;`
-        });
-        
-        // Create spacer elements for virtual scrolling
-        const topSpacer = Utils.createElement('div', 'virtual-scroll-spacer-top', {
-            style: 'height: 0px;'
-        });
-        
-        const bottomSpacer = Utils.createElement('div', 'virtual-scroll-spacer-bottom', {
-            style: `height: ${(this.virtualScrollConfig.totalRows - this.virtualScrollConfig.endIndex) * rowHeight}px;`
-        });
-        
-        // Create visible rows container
-        const visibleRowsContainer = Utils.createElement('div', 'virtual-scroll-visible-rows');
-        
-        // Store references
-        this.virtualScrollElements = {
-            container: scrollContainer,
-            topSpacer,
-            bottomSpacer,
-            visibleRowsContainer,
-            tbody
-        };
-        
-        // Render initial visible rows
-        this.renderVirtualScrollRows();
-        
-        // Setup scroll event listener with throttling
-        let scrollTimeout;
-        scrollContainer.addEventListener('scroll', () => {
-            if (scrollTimeout) {
-                clearTimeout(scrollTimeout);
-            }
-            
-            scrollTimeout = setTimeout(() => {
-                this.handleVirtualScroll();
-            }, 16); // ~60fps
-        });
-        
-        // Assemble virtual scroll structure
-        visibleRowsContainer.appendChild(topSpacer);
-        
-        // Create table structure within visible container
-        const virtualTable = Utils.createElement('table', 'table table-striped table-hover memreport-data-table virtual-scroll-table');
-        const virtualTbody = Utils.createElement('tbody');
-        
-        virtualTable.appendChild(virtualTbody);
-        visibleRowsContainer.appendChild(virtualTable);
-        visibleRowsContainer.appendChild(bottomSpacer);
-        
-        scrollContainer.appendChild(visibleRowsContainer);
-        
-        // Replace the original tbody with our virtual scroll container
-        tbody.appendChild(scrollContainer);
-        
-        // Store reference to virtual tbody for updates
-        this.virtualTbody = virtualTbody;
-        
-        return tbody;
-    }
 
-    // Render visible rows for virtual scrolling
-    renderVirtualScrollRows() {
-        if (!this.virtualTbody || !this.virtualScrollConfig) return;
-        
-        const { startIndex, endIndex } = this.virtualScrollConfig;
-        const fragment = document.createDocumentFragment();
-        
-        // Clear existing rows
-        this.virtualTbody.innerHTML = '';
-        
-        // Render visible rows using idle callbacks for better performance
-        this.renderRowsProgressively(startIndex, endIndex, fragment, () => {
-            this.virtualTbody.appendChild(fragment);
-        });
-    }
 
-    // Render rows progressively using requestIdleCallback
-    renderRowsProgressively(startIndex, endIndex, fragment, callback) {
-        const batchSize = 50; // Rows to render per batch
-        let currentIndex = startIndex;
-        
-        const renderBatch = () => {
-            const batchEnd = Math.min(currentIndex + batchSize, endIndex);
-            
-            // Render batch of rows
-            for (let i = currentIndex; i < batchEnd; i++) {
-                if (i < this.currentData.rows.length) {
-                    const tr = this.createTableRow(this.currentData.rows[i], i);
-                    fragment.appendChild(tr);
-                }
-            }
-            
-            currentIndex = batchEnd;
-            
-            // Continue with next batch or finish
-            if (currentIndex < endIndex) {
-                if (typeof requestIdleCallback !== 'undefined') {
-                    requestIdleCallback(renderBatch, { timeout: 50 });
-                } else {
-                    setTimeout(renderBatch, 0);
-                }
-            } else {
-                callback();
-            }
-        };
-        
-        renderBatch();
-    }
-
-    // Handle virtual scroll events
-    handleVirtualScroll() {
-        if (!this.virtualScrollElements || !this.virtualScrollConfig) return;
-        
-        const { container } = this.virtualScrollElements;
-        const { rowHeight, visibleRows, bufferRows, totalRows } = this.virtualScrollConfig;
-        
-        const scrollTop = container.scrollTop;
-        const newStartIndex = Math.floor(scrollTop / rowHeight);
-        const newEndIndex = Math.min(newStartIndex + visibleRows + (bufferRows * 2), totalRows);
-        
-        // Only update if the visible range has changed significantly
-        const threshold = Math.floor(bufferRows / 2);
-        if (Math.abs(newStartIndex - this.virtualScrollConfig.startIndex) > threshold) {
-            this.virtualScrollConfig.startIndex = Math.max(0, newStartIndex - bufferRows);
-            this.virtualScrollConfig.endIndex = newEndIndex;
-            
-            // Update spacers
-            this.updateVirtualScrollSpacers();
-            
-            // Re-render visible rows
-            this.renderVirtualScrollRows();
-        }
-    }
-
-    // Update virtual scroll spacers
-    updateVirtualScrollSpacers() {
-        if (!this.virtualScrollElements || !this.virtualScrollConfig) return;
-        
-        const { topSpacer, bottomSpacer } = this.virtualScrollElements;
-        const { startIndex, endIndex, totalRows, rowHeight } = this.virtualScrollConfig;
-        
-        // Update top spacer height
-        topSpacer.style.height = `${startIndex * rowHeight}px`;
-        
-        // Update bottom spacer height
-        bottomSpacer.style.height = `${(totalRows - endIndex) * rowHeight}px`;
-    }
 
     // Create a single table row
     createTableRow(row, rowIndex) {
@@ -2448,34 +2252,11 @@ class MemReportTable {
         this.currentData = newSectionData;
         const newRowCount = this.currentData.rows.length;
         
-        // Check if we need to switch between virtual and standard scrolling
-        const wasVirtual = this.virtualScrollConfig !== undefined;
-        const shouldBeVirtual = this.currentData.rows.length > 500;
-        
-        if (wasVirtual !== shouldBeVirtual) {
-            // Need to completely re-render the table
-            this.render();
-            return;
-        }
-        
-        if (shouldBeVirtual && this.virtualScrollConfig) {
-            // Update virtual scrolling configuration
-            this.virtualScrollConfig.totalRows = this.currentData.rows.length;
-            this.virtualScrollConfig.endIndex = Math.min(
-                this.virtualScrollConfig.startIndex + this.virtualScrollConfig.visibleRows + this.virtualScrollConfig.bufferRows,
-                this.virtualScrollConfig.totalRows
-            );
-            
-            // Update spacers and re-render visible rows
-            this.updateVirtualScrollSpacers();
-            this.renderVirtualScrollRows();
-        } else {
-            // Standard table update
-            const tbody = this.tableElement.querySelector('tbody');
-            if (tbody) {
-                const newTbody = this.createTableBody();
-                this.tableElement.replaceChild(newTbody, tbody);
-            }
+        // Update table body with new data
+        const tbody = this.tableElement.querySelector('tbody');
+        if (tbody) {
+            const newTbody = this.createTableBody();
+            this.tableElement.replaceChild(newTbody, tbody);
         }
         
         // Update header sort indicators
@@ -2619,40 +2400,7 @@ class MemReportTable {
         return this.originalData.rows ? this.originalData.rows.length : 0;
     }
 
-    // Cleanup virtual scrolling resources
-    cleanup() {
-        if (this.virtualScrollElements && this.virtualScrollElements.container) {
-            // Remove scroll event listeners
-            const container = this.virtualScrollElements.container;
-            const scrollHandler = this.handleVirtualScroll.bind(this);
-            container.removeEventListener('scroll', scrollHandler);
-        }
-        
-        // Clear virtual scroll references
-        this.virtualScrollConfig = null;
-        this.virtualScrollElements = null;
-        this.virtualTbody = null;
-    }
 
-    // Check if table is using virtual scrolling
-    isVirtualScrolling() {
-        return this.virtualScrollConfig !== undefined;
-    }
-
-    // Get virtual scroll statistics
-    getVirtualScrollStats() {
-        if (!this.virtualScrollConfig) {
-            return null;
-        }
-        
-        return {
-            totalRows: this.virtualScrollConfig.totalRows,
-            visibleRows: this.virtualScrollConfig.visibleRows,
-            startIndex: this.virtualScrollConfig.startIndex,
-            endIndex: this.virtualScrollConfig.endIndex,
-            renderedRows: this.virtualScrollConfig.endIndex - this.virtualScrollConfig.startIndex
-        };
-    }
 }
 
 // Export MemReportTable for use in other modules
