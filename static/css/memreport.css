@@ -1,0 +1,178 @@
+/* MemReport Analyzer Styles */
+
+/* Sticky section headers */
+.sticky-card-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: inherit;
+    border-bottom: 1px solid rgba(0,0,0,.125);
+}
+
+/* Section actions alignment */
+.memreport-section .section-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+/* Table styling */
+.memreport-data-table {
+    font-size: 0.9rem;
+}
+
+.memreport-data-table th.sortable-header {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s ease;
+}
+
+.memreport-data-table th.sortable-header:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.memreport-data-table th.sortable-header:focus {
+    outline: 2px solid #007bff;
+    outline-offset: -2px;
+}
+
+/* Sort indicators */
+.sort-indicator {
+    font-size: 0.8rem;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+.sortable-header:hover .sort-indicator {
+    opacity: 1;
+}
+
+/* Search and filter styling */
+.section-search-filters {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    padding: 1rem;
+}
+
+.filter-status {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #dee2e6;
+}
+
+/* Table responsiveness */
+.table-responsive {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+/* Memory value formatting */
+.memory-value {
+    font-family: 'Courier New', monospace;
+    text-align: right;
+}
+
+/* Chart container (for future use) */
+.chart-container {
+    max-height: 200px;
+    margin: 10px 0;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    padding: 0.5rem;
+}
+
+/* Accessibility improvements */
+.memreport-section [role="table"] {
+    border-collapse: collapse;
+}
+
+.memreport-section [role="row"]:focus {
+    outline: 2px solid #007bff;
+    outline-offset: -2px;
+}
+
+/* Loading states */
+.memreport-loading {
+    text-align: center;
+    padding: 2rem;
+    color: #6c757d;
+}
+
+.memreport-loading::after {
+    content: "...";
+    animation: dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes dots {
+    0%, 20% { content: "."; }
+    40% { content: ".."; }
+    60% { content: "..."; }
+    80%, 100% { content: ""; }
+}
+
+/* Error states */
+.memreport-error {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+    padding: 1rem;
+    border-radius: 0.375rem;
+    margin: 1rem 0;
+}
+
+/* Empty states */
+.memreport-empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #6c757d;
+}
+
+/* Pin indicator styling */
+.badge.bg-primary {
+    background-color: #0d6efd !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .sticky-card-header {
+        position: relative; /* Disable sticky on mobile */
+    }
+    
+    .section-actions {
+        flex-direction: column;
+        gap: 0.125rem;
+    }
+    
+    .section-actions .btn {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    
+    .table-responsive {
+        max-height: 400px;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .sticky-card-header {
+        border-bottom: 2px solid;
+    }
+    
+    .sortable-header:focus {
+        outline: 3px solid;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .sortable-header,
+    .sort-indicator {
+        transition: none;
+    }
+    
+    .memreport-loading::after {
+        animation: none;
+        content: "...";
+    }
+}
