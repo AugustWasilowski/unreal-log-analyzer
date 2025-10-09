@@ -263,8 +263,19 @@ class MemReportPage {
         // Clear existing content
         container.innerHTML = '';
 
-        // Create main container
-        const memreportContainer = Utils.createElement('div', 'memreport-container');
+        // Create main container with proper ARIA structure
+        const memreportContainer = Utils.createElement('div', 'memreport-container', {
+            'role': 'main',
+            'aria-label': 'Memory Report Analysis'
+        });
+        
+        // Add ARIA live region for dynamic updates
+        const liveRegion = Utils.createElement('div', 'visually-hidden', {
+            'id': 'memreport-live-region',
+            'aria-live': 'polite',
+            'aria-atomic': 'false'
+        });
+        memreportContainer.appendChild(liveRegion);
         
         // Render metadata overview if available
         if (memreportData.meta) {
@@ -289,23 +300,64 @@ class MemReportPage {
 
         container.appendChild(memreportContainer);
         
+        // Setup global keyboard navigation
+        this.setupGlobalKeyboardNavigation(memreportContainer);
+        
         // Announce to screen readers
         Utils.announceToScreenReader(`MemReport loaded with ${orderedSections.length} sections`);
     }
 
     // Render metadata overview section
     renderMetadata(meta) {
-        const metaCard = Utils.createElement('div', 'card mb-3 memreport-meta');
+        const metaCard = Utils.createElement('div', 'card mb-3 memreport-meta', {
+            'role': 'region',
+            'aria-labelledby': 'meta-header'
+        });
         
         const cardHeader = Utils.createElement('div', 'card-header');
-        const headerTitle = Utils.createElement('h5', 'mb-0');
+        const headerTitle = Utils.createElement('h5', 'mb-0', {
+            id: 'meta-header'
+        });
         headerTitle.textContent = 'Memory Report Overview';
         cardHeader.appendChild(headerTitle);
         
         const cardBody = Utils.createElement('div', 'card-body');
         
-        // Create metadata table
-        const metaTable = Utils.createElement('table', 'table table-sm');
+        // Create metadata table with proper ARIA support
+        const metaTable = Utils.createElement('table', 'table table-sm', {
+            'role': 'table',
+            'aria-label': 'Memory report metadata',
+            'aria-describedby': 'meta-description'
+        });
+        
+        // Add description for screen readers
+        const metaDescription = Utils.createElement('div', 'visually-hidden', {
+            id: 'meta-description'
+        });
+        metaDescription.textContent = 'Table containing metadata information about the memory report';
+        cardBody.appendChild(metaDescription);
+        
+        // Add table headers for screen readers
+        const thead = Utils.createElement('thead', 'visually-hidden');
+        const headerRow = Utils.createElement('tr');
+        
+        const propertyHeader = Utils.createElement('th', '', {
+            'scope': 'col',
+            'id': 'meta-property-header'
+        });
+        propertyHeader.textContent = 'Property';
+        
+        const valueHeader = Utils.createElement('th', '', {
+            'scope': 'col',
+            'id': 'meta-value-header'
+        });
+        valueHeader.textContent = 'Value';
+        
+        headerRow.appendChild(propertyHeader);
+        headerRow.appendChild(valueHeader);
+        thead.appendChild(headerRow);
+        metaTable.appendChild(thead);
+        
         const tbody = Utils.createElement('tbody');
         
         const metaFields = [
@@ -318,11 +370,22 @@ class MemReportPage {
         
         metaFields.forEach(field => {
             if (meta[field.key]) {
-                const row = Utils.createElement('tr');
-                const labelCell = Utils.createElement('td');
+                const row = Utils.createElement('tr', '', {
+                    'role': 'row'
+                });
+                
+                const labelCell = Utils.createElement('td', 'fw-bold', {
+                    'role': 'cell',
+                    'headers': 'meta-property-header'
+                });
                 labelCell.textContent = field.label;
-                const valueCell = Utils.createElement('td');
+                
+                const valueCell = Utils.createElement('td', '', {
+                    'role': 'cell',
+                    'headers': 'meta-value-header'
+                });
                 valueCell.textContent = meta[field.key];
+                
                 row.appendChild(labelCell);
                 row.appendChild(valueCell);
                 tbody.appendChild(row);
@@ -339,8 +402,11 @@ class MemReportPage {
 
     // Render individual section
     renderSection(section) {
-        const sectionCard = Utils.createElement('div', 'card mb-3 memreport-section');
-        sectionCard.setAttribute('data-section-key', section.key);
+        const sectionCard = Utils.createElement('div', 'card mb-3 memreport-section', {
+            'role': 'region',
+            'aria-labelledby': `section-${section.key}`,
+            'data-section-key': section.key
+        });
         
         // Create section header
         const sectionHeader = this.createSectionHeader(section);
@@ -351,7 +417,9 @@ class MemReportPage {
         const isCollapsed = this.appState.isSectionCollapsed(section.key);
         
         const collapseDiv = Utils.createElement('div', `collapse ${isCollapsed ? '' : 'show'}`, {
-            id: collapseId
+            id: collapseId,
+            'role': 'region',
+            'aria-labelledby': `section-${section.key}`
         });
         
         const cardBody = Utils.createElement('div', 'card-body');
@@ -383,22 +451,37 @@ class MemReportPage {
             'data-bs-toggle': 'collapse',
             'data-bs-target': `#collapse-${section.key}`,
             'aria-expanded': isCollapsed ? 'false' : 'true',
-            'aria-controls': `collapse-${section.key}`
+            'aria-controls': `collapse-${section.key}`,
+            'aria-describedby': `count-${section.key}`,
+            'tabindex': '0'
+        });
+        
+        // Add keyboard navigation for collapse button
+        collapseButton.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                collapseButton.click();
+            }
         });
         
         const titleText = Utils.createElement('h5', 'mb-0 me-2');
         titleText.textContent = section.title;
         
-        // Row count badge
+        // Row count badge with proper ARIA labeling
         const rowCount = this.getSectionRowCount(section);
         const countBadge = Utils.createElement('span', 'badge bg-secondary me-2', {
-            id: `count-${section.key}`
+            id: `count-${section.key}`,
+            'aria-label': `${rowCount} ${section.type === 'table' ? 'rows' : 'items'} in ${section.title}`,
+            'role': 'status'
         });
         countBadge.textContent = `${rowCount} ${section.type === 'table' ? 'rows' : 'items'}`;
         
-        // Pin indicator
+        // Pin indicator with proper ARIA labeling
         if (isPinned) {
-            const pinIndicator = Utils.createElement('span', 'badge bg-primary me-2');
+            const pinIndicator = Utils.createElement('span', 'badge bg-primary me-2', {
+                'aria-label': `${section.title} is pinned to top`,
+                'role': 'status'
+            });
             pinIndicator.textContent = '📌 Pinned';
             leftSide.appendChild(pinIndicator);
         }
@@ -414,14 +497,18 @@ class MemReportPage {
         headerRow.appendChild(actionButtons);
         cardHeader.appendChild(headerRow);
         
-        // Add collapse event listeners
+        // Add collapse event listeners with ARIA updates
         const collapseElement = document.querySelector(`#collapse-${section.key}`);
         if (collapseElement) {
             collapseElement.addEventListener('shown.bs.collapse', () => {
                 this.appState.toggleSectionCollapsed(section.key);
+                collapseButton.setAttribute('aria-expanded', 'true');
+                Utils.announceToScreenReader(`${section.title} section expanded`);
             });
             collapseElement.addEventListener('hidden.bs.collapse', () => {
                 this.appState.toggleSectionCollapsed(section.key);
+                collapseButton.setAttribute('aria-expanded', 'false');
+                Utils.announceToScreenReader(`${section.title} section collapsed`);
             });
         }
         
@@ -553,16 +640,57 @@ class MemReportPage {
             return kvContainer;
         }
         
-        const kvTable = Utils.createElement('table', 'table table-sm table-striped');
+        const kvTable = Utils.createElement('table', 'table table-sm table-striped', {
+            'role': 'table',
+            'aria-label': `${section.title} key-value data`,
+            'aria-describedby': `kv-summary-${section.key}`
+        });
+        
+        // Add table summary for screen readers
+        const tableSummary = Utils.createElement('div', 'visually-hidden', {
+            id: `kv-summary-${section.key}`
+        });
+        tableSummary.textContent = `Table containing ${section.items.length} key-value pairs for ${section.title}`;
+        kvContainer.appendChild(tableSummary);
+        
+        // Add table header for better screen reader support
+        const thead = Utils.createElement('thead', 'visually-hidden');
+        const headerRow = Utils.createElement('tr');
+        
+        const nameHeader = Utils.createElement('th', '', {
+            'scope': 'col',
+            'id': `kv-name-header-${section.key}`
+        });
+        nameHeader.textContent = 'Property';
+        
+        const valueHeader = Utils.createElement('th', '', {
+            'scope': 'col',
+            'id': `kv-value-header-${section.key}`
+        });
+        valueHeader.textContent = 'Value';
+        
+        headerRow.appendChild(nameHeader);
+        headerRow.appendChild(valueHeader);
+        thead.appendChild(headerRow);
+        kvTable.appendChild(thead);
+        
         const tbody = Utils.createElement('tbody');
         
-        section.items.forEach(item => {
-            const row = Utils.createElement('tr');
+        section.items.forEach((item, index) => {
+            const row = Utils.createElement('tr', '', {
+                'role': 'row'
+            });
             
-            const nameCell = Utils.createElement('td', 'fw-bold');
+            const nameCell = Utils.createElement('td', 'fw-bold', {
+                'role': 'cell',
+                'headers': `kv-name-header-${section.key}`
+            });
             nameCell.textContent = item.name;
             
-            const valueCell = Utils.createElement('td');
+            const valueCell = Utils.createElement('td', '', {
+                'role': 'cell',
+                'headers': `kv-value-header-${section.key}`
+            });
             const valueText = item.unit ? `${item.value} ${item.unit}` : item.value;
             valueCell.textContent = valueText;
             
@@ -605,23 +733,40 @@ class MemReportPage {
 
     // Create search input for table sections
     createSearchInput(sectionKey) {
+        const section = this.appState.getState().memreport.sections.find(s => s.key === sectionKey);
+        const sectionTitle = section ? section.title : 'section';
+        
         const searchContainer = Utils.createElement('div', 'mb-3 section-search');
+        
+        // Add search help text
+        const helpText = Utils.createElement('div', 'form-text mb-2', {
+            id: `search-help-${sectionKey}`
+        });
+        helpText.textContent = `Filter ${sectionTitle} by typing keywords. Use Escape to clear.`;
         
         const inputGroup = Utils.createElement('div', 'input-group');
         
         const searchInput = Utils.createElement('input', 'form-control', {
             type: 'text',
-            placeholder: 'Search this section...',
-            'aria-label': 'Search section',
+            placeholder: `Search ${sectionTitle}...`,
+            'aria-label': `Search ${sectionTitle}`,
+            'aria-describedby': `search-help-${sectionKey} search-status-${sectionKey}`,
             id: `search-${sectionKey}`
         });
         
         const clearButton = Utils.createElement('button', 'btn btn-outline-secondary', {
             type: 'button',
             title: 'Clear search',
-            'aria-label': 'Clear search'
+            'aria-label': `Clear search for ${sectionTitle}`
         });
         clearButton.innerHTML = '✕';
+        
+        // Add search status region for screen readers
+        const statusRegion = Utils.createElement('div', 'visually-hidden', {
+            id: `search-status-${sectionKey}`,
+            'aria-live': 'polite',
+            'aria-atomic': 'true'
+        });
         
         // Get current search term
         const filters = this.appState.getState().memreport.ui.sectionFilters[sectionKey];
@@ -629,14 +774,36 @@ class MemReportPage {
             searchInput.value = filters.search;
         }
         
-        // Debounced search handler
+        // Debounced search handler with status updates
         const debouncedSearch = Utils.debounce((term) => {
             this.appState.updateMemReportFilters(sectionKey, { search: term });
             this.updateSectionTable(sectionKey);
+            
+            // Update status for screen readers
+            const filteredSection = this.appState.getFilteredSectionData(sectionKey);
+            const resultCount = filteredSection.rows ? filteredSection.rows.length : 0;
+            const totalCount = section.rows ? section.rows.length : 0;
+            
+            if (term.trim()) {
+                statusRegion.textContent = `${resultCount} of ${totalCount} rows match "${term}"`;
+            } else {
+                statusRegion.textContent = `Showing all ${totalCount} rows`;
+            }
         }, 300);
         
         searchInput.addEventListener('input', (e) => {
             debouncedSearch(e.target.value);
+        });
+        
+        // Enhanced keyboard support
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                searchInput.value = '';
+                this.appState.updateMemReportFilters(sectionKey, { search: '' });
+                this.updateSectionTable(sectionKey);
+                statusRegion.textContent = `Search cleared. Showing all rows.`;
+            }
         });
         
         clearButton.addEventListener('click', () => {
@@ -644,11 +811,14 @@ class MemReportPage {
             this.appState.updateMemReportFilters(sectionKey, { search: '' });
             this.updateSectionTable(sectionKey);
             searchInput.focus();
+            statusRegion.textContent = `Search cleared. Showing all rows.`;
         });
         
+        searchContainer.appendChild(helpText);
         inputGroup.appendChild(searchInput);
         inputGroup.appendChild(clearButton);
         searchContainer.appendChild(inputGroup);
+        searchContainer.appendChild(statusRegion);
         
         return searchContainer;
     }
@@ -886,7 +1056,19 @@ class MemReportPage {
             if (countBadge) {
                 const filteredSection = this.appState.getFilteredSectionData(section.key);
                 const count = this.getSectionRowCount(filteredSection);
+                const totalCount = this.getSectionRowCount(section);
+                
+                // Update badge text
                 countBadge.textContent = `${count} ${section.type === 'table' ? 'rows' : 'items'}`;
+                
+                // Update ARIA label with filtering information
+                if (count !== totalCount) {
+                    countBadge.setAttribute('aria-label', 
+                        `${count} of ${totalCount} ${section.type === 'table' ? 'rows' : 'items'} shown after filtering in ${section.title}`);
+                } else {
+                    countBadge.setAttribute('aria-label', 
+                        `${count} ${section.type === 'table' ? 'rows' : 'items'} in ${section.title}`);
+                }
             }
         });
     }
@@ -925,6 +1107,175 @@ class MemReportPage {
         errorsCard.appendChild(cardBody);
         
         return errorsCard;
+    }
+
+    // Setup global keyboard navigation for the MemReport page
+    setupGlobalKeyboardNavigation(container) {
+        // Add keyboard event listener to container
+        container.addEventListener('keydown', (e) => {
+            // Handle global keyboard shortcuts
+            switch (e.key) {
+                case '/':
+                    // Focus first visible search input (like GitHub)
+                    e.preventDefault();
+                    this.focusFirstSearchInput();
+                    break;
+                case 'Escape':
+                    // Clear all search inputs and close any open menus
+                    e.preventDefault();
+                    this.clearAllSearchInputs();
+                    this.closeAllMenus();
+                    break;
+                case 'j':
+                case 'ArrowDown':
+                    // Navigate to next section (when not in input)
+                    if (!this.isInInputElement(e.target)) {
+                        e.preventDefault();
+                        this.navigateToNextSection();
+                    }
+                    break;
+                case 'k':
+                case 'ArrowUp':
+                    // Navigate to previous section (when not in input)
+                    if (!this.isInInputElement(e.target)) {
+                        e.preventDefault();
+                        this.navigateToPreviousSection();
+                    }
+                    break;
+                case 'Enter':
+                case ' ':
+                    // Toggle section if focused on section header
+                    if (e.target.closest('.card-header')) {
+                        const sectionKey = e.target.closest('.memreport-section')?.getAttribute('data-section-key');
+                        if (sectionKey) {
+                            e.preventDefault();
+                            this.toggleSection(sectionKey);
+                        }
+                    }
+                    break;
+            }
+        });
+        
+        // Set initial focus to first section
+        this.setInitialFocus(container);
+    }
+
+    // Focus the first visible search input
+    focusFirstSearchInput() {
+        const firstSearchInput = document.querySelector('.memreport-container input[type="text"]:not([disabled])');
+        if (firstSearchInput) {
+            firstSearchInput.focus();
+            Utils.announceToScreenReader('Search input focused');
+        }
+    }
+
+    // Clear all search inputs
+    clearAllSearchInputs() {
+        const searchInputs = document.querySelectorAll('.memreport-container input[type="text"]');
+        searchInputs.forEach(input => {
+            if (input.value) {
+                input.value = '';
+                // Trigger input event to update filters
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        });
+        if (searchInputs.length > 0) {
+            Utils.announceToScreenReader('All search filters cleared');
+        }
+    }
+
+    // Close all open menus
+    closeAllMenus() {
+        const openMenus = document.querySelectorAll('.dropdown-menu.show');
+        openMenus.forEach(menu => {
+            menu.classList.remove('show');
+            if (menu.parentNode) {
+                menu.parentNode.removeChild(menu);
+            }
+        });
+    }
+
+    // Check if element is an input element
+    isInInputElement(element) {
+        return element.tagName === 'INPUT' || 
+               element.tagName === 'TEXTAREA' || 
+               element.contentEditable === 'true';
+    }
+
+    // Navigate to next section
+    navigateToNextSection() {
+        const sections = Array.from(document.querySelectorAll('.memreport-section'));
+        const currentFocused = document.activeElement.closest('.memreport-section');
+        
+        if (!currentFocused) {
+            // Focus first section
+            if (sections.length > 0) {
+                this.focusSection(sections[0]);
+            }
+            return;
+        }
+        
+        const currentIndex = sections.indexOf(currentFocused);
+        const nextIndex = (currentIndex + 1) % sections.length;
+        this.focusSection(sections[nextIndex]);
+    }
+
+    // Navigate to previous section
+    navigateToPreviousSection() {
+        const sections = Array.from(document.querySelectorAll('.memreport-section'));
+        const currentFocused = document.activeElement.closest('.memreport-section');
+        
+        if (!currentFocused) {
+            // Focus last section
+            if (sections.length > 0) {
+                this.focusSection(sections[sections.length - 1]);
+            }
+            return;
+        }
+        
+        const currentIndex = sections.indexOf(currentFocused);
+        const prevIndex = currentIndex === 0 ? sections.length - 1 : currentIndex - 1;
+        this.focusSection(sections[prevIndex]);
+    }
+
+    // Focus a section
+    focusSection(sectionElement) {
+        const collapseButton = sectionElement.querySelector('button[data-bs-toggle="collapse"]');
+        if (collapseButton) {
+            collapseButton.focus();
+            const sectionTitle = collapseButton.querySelector('h5')?.textContent || 'section';
+            Utils.announceToScreenReader(`Focused on ${sectionTitle}`);
+        }
+    }
+
+    // Toggle section collapse state
+    toggleSection(sectionKey) {
+        const collapseButton = document.querySelector(`button[data-bs-target="#collapse-${sectionKey}"]`);
+        if (collapseButton) {
+            collapseButton.click();
+        }
+    }
+
+    // Set initial focus when page loads
+    setInitialFocus(container) {
+        // Focus first section after a short delay to allow rendering to complete
+        setTimeout(() => {
+            const firstSection = container.querySelector('.memreport-section');
+            if (firstSection) {
+                this.focusSection(firstSection);
+            }
+        }, 100);
+    }
+
+    // Announce updates to the MemReport live region
+    announceToMemReportLiveRegion(message) {
+        const liveRegion = document.getElementById('memreport-live-region');
+        if (liveRegion) {
+            liveRegion.textContent = message;
+        } else {
+            // Fallback to global live region
+            Utils.announceToScreenReader(message);
+        }
     }
 
     // Cleanup method
@@ -999,11 +1350,14 @@ class MemReportTable {
         const sortState = this.appState.getState().memreport.ui.sectionSorts[this.sectionKey] || {};
         
         this.currentData.columns.forEach((column, index) => {
+            const headerId = `header-${this.sectionKey}-${index}`;
             const th = Utils.createElement('th', 'sortable-header', {
                 role: 'columnheader',
                 tabindex: '0',
                 'aria-sort': this.getAriaSortValue(index, sortState),
-                'data-column-index': index.toString()
+                'data-column-index': index.toString(),
+                'id': headerId,
+                'scope': 'col'
             });
             
             // Create header content container
@@ -1014,21 +1368,31 @@ class MemReportTable {
             titleSpan.textContent = column;
             headerContent.appendChild(titleSpan);
             
-            // Sort indicator
+            // Sort indicator with better accessibility
             const sortIndicator = Utils.createElement('span', 'sort-indicator ms-2', {
-                'aria-hidden': 'true'
+                'aria-hidden': 'true',
+                'title': this.getSortIndicatorTitle(index, sortState)
             });
             sortIndicator.innerHTML = this.getSortIndicator(index, sortState);
             headerContent.appendChild(sortIndicator);
             
             th.appendChild(headerContent);
             
-            // Add click handler for sorting
-            th.addEventListener('click', () => this.handleSort(index));
+            // Enhanced keyboard and click handlers
+            const handleSort = () => {
+                this.handleSort(index);
+                // Update sort indicator title after sort
+                setTimeout(() => {
+                    const newSortState = this.appState.getState().memreport.ui.sectionSorts[this.sectionKey] || {};
+                    sortIndicator.setAttribute('title', this.getSortIndicatorTitle(index, newSortState));
+                }, 100);
+            };
+            
+            th.addEventListener('click', handleSort);
             th.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    this.handleSort(index);
+                    handleSort();
                 }
             });
             
@@ -1264,11 +1628,17 @@ class MemReportTable {
         const tr = Utils.createElement('tr', '', {
             role: 'row',
             tabindex: '0',
-            'data-row-index': rowIndex.toString()
+            'data-row-index': rowIndex.toString(),
+            'aria-rowindex': (rowIndex + 2).toString() // +2 because header is row 1
         });
         
         row.forEach((cell, cellIndex) => {
-            const td = Utils.createElement('td', '', { role: 'cell' });
+            const headerId = `header-${this.sectionKey}-${cellIndex}`;
+            const td = Utils.createElement('td', '', { 
+                role: 'cell',
+                'headers': headerId,
+                'aria-describedby': headerId
+            });
             
             // Format cell content based on column type
             const formattedContent = this.formatCellContent(cell, this.currentData.columns[cellIndex]);
@@ -1373,9 +1743,22 @@ class MemReportTable {
         return sortState.direction === 'asc' ? '↑' : '↓';
     }
 
+    // Get sort indicator title for accessibility
+    getSortIndicatorTitle(columnIndex, sortState) {
+        const columnName = this.currentData.columns[columnIndex];
+        if (sortState.column !== columnIndex) {
+            return `Click to sort by ${columnName}`;
+        }
+        const currentDirection = sortState.direction === 'asc' ? 'ascending' : 'descending';
+        const nextDirection = sortState.direction === 'asc' ? 'descending' : 'ascending';
+        return `Currently sorted by ${columnName} in ${currentDirection} order. Click to sort in ${nextDirection} order.`;
+    }
+
     // Update table data (called when filters change)
     updateData(newSectionData) {
+        const previousRowCount = this.currentData ? this.currentData.rows.length : 0;
         this.currentData = newSectionData;
+        const newRowCount = this.currentData.rows.length;
         
         // Check if we need to switch between virtual and standard scrolling
         const wasVirtual = this.virtualScrollConfig !== undefined;
@@ -1409,6 +1792,12 @@ class MemReportTable {
         
         // Update header sort indicators
         this.updateHeaderSortIndicators();
+        
+        // Announce changes to screen readers if row count changed
+        if (newRowCount !== previousRowCount) {
+            const sectionTitle = this.currentData.title || 'table';
+            Utils.announceToScreenReader(`${sectionTitle} updated. Now showing ${newRowCount} rows.`);
+        }
     }
 
     // Update header sort indicators

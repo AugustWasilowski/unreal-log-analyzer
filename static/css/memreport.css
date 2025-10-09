@@ -89,6 +89,65 @@
 .memreport-section [role="row"]:focus {
     outline: 2px solid #007bff;
     outline-offset: -2px;
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+/* Screen reader only content */
+.visually-hidden {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+}
+
+/* Focus indicators for interactive elements */
+.memreport-section button:focus,
+.memreport-section input:focus,
+.memreport-section [tabindex]:focus {
+    outline: 2px solid #007bff;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+}
+
+/* Enhanced focus for sortable headers */
+.sortable-header:focus {
+    outline: 2px solid #007bff;
+    outline-offset: -2px;
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ARIA live region styling */
+#memreport-live-region {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
+/* High contrast mode improvements */
+@media (prefers-contrast: high) {
+    .memreport-section [role="row"]:focus {
+        outline: 3px solid;
+        background-color: rgba(255, 255, 255, 0.3);
+    }
+    
+    .sortable-header:focus {
+        outline: 3px solid;
+        background-color: rgba(255, 255, 255, 0.4);
+    }
+    
+    .memreport-section button:focus,
+    .memreport-section input:focus,
+    .memreport-section [tabindex]:focus {
+        outline: 3px solid;
+        box-shadow: none;
+    }
 }
 
 /* Loading states */
