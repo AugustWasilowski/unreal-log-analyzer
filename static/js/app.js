@@ -55,6 +55,23 @@ class LogAnalyzerApp {
             });
         }
 
+        // Paste log form
+        const pasteForm = document.getElementById('pasteForm');
+        if (pasteForm) {
+            pasteForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handlePasteAnalyze();
+            });
+        }
+
+        const pasteClearButton = document.getElementById('pasteClearButton');
+        if (pasteClearButton) {
+            pasteClearButton.addEventListener('click', () => {
+                const textarea = document.getElementById('pasteLogText');
+                if (textarea) textarea.value = '';
+            });
+        }
+
         if (this.ui.elements.logFile) {
             this.ui.elements.logFile.addEventListener('change', async () => {
                 if (this.ui.elements.logFile.files.length > 0) {
@@ -495,6 +512,46 @@ class LogAnalyzerApp {
     // Handle file upload (legacy method for backward compatibility)
     async handleFileUpload() {
         return this.handleLogFileUpload();
+    }
+
+    // Handle paste log analysis
+    async handlePasteAnalyze() {
+        const textarea = document.getElementById('pasteLogText');
+        const text = textarea ? textarea.value : '';
+
+        if (!text.trim()) {
+            Utils.showErrorToast('Please paste some log content first');
+            return;
+        }
+
+        const analyzeButton = document.getElementById('pasteAnalyzeButton');
+        if (analyzeButton) {
+            analyzeButton.textContent = 'Analyzing...';
+            analyzeButton.disabled = true;
+        }
+
+        this.appState.pauseSubscriptions();
+
+        try {
+            const data = await API.pasteLog(text);
+
+            this.appState.update({
+                currentFile: 'pasted-log',
+                allEntries: data.entries,
+                logTypes: data.log_types
+            });
+
+            this.ui.createLogTypeFilters(data.log_types);
+            this.updateDisplay();
+        } catch (error) {
+            // Error already handled by API module
+        } finally {
+            if (analyzeButton) {
+                analyzeButton.textContent = 'Analyze';
+                analyzeButton.disabled = false;
+            }
+            this.appState.resumeSubscriptions();
+        }
     }
 
     // Handle search change

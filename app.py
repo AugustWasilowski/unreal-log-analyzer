@@ -23,6 +23,27 @@ def index():
 def health():
     return jsonify({'status': 'healthy', 'message': 'Unreal Engine Log Analyzer is running'}), 200
 
+def _parse_log_lines(lines):
+    """Parse an iterable of log lines and return (entries, log_types)."""
+    log_entries = []
+    log_type_counts = {}
+
+    for line in lines:
+        if line.strip() and ':' in line:
+            match = LOG_CATEGORY_PATTERN.match(line)
+            if match:
+                log_category = match.group(1)
+                content_start = match.end()
+                log_type_counts[log_category] = log_type_counts.get(log_category, 0) + 1
+                log_entries.append({
+                    'type': log_category,
+                    'content': line[content_start:].strip()
+                })
+
+    log_types = [{'type': t, 'count': log_type_counts[t]} for t in sorted(log_type_counts.keys())]
+    return log_entries, log_types
+
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
@@ -37,27 +58,32 @@ def upload_file():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
         
-        # Read and process the log file
-        log_entries = []
-        log_type_counts = {}
-        
         with open(filepath, 'r', encoding='utf-8') as f:
-            for line in f:
-                if line.strip() and ':' in line:
-                    match = LOG_CATEGORY_PATTERN.match(line)
-                    if match:
-                        log_category = match.group(1)
-                        content_start = match.end()
-                        log_type_counts[log_category] = log_type_counts.get(log_category, 0) + 1
-                        log_entries.append({
-                            'type': log_category,
-                            'content': line[content_start:].strip()
-                        })
-        log_types = [ {'type': t, 'count': log_type_counts[t]} for t in sorted(log_type_counts.keys()) ]
+            log_entries, log_types = _parse_log_lines(f)
+
         return jsonify({
             'entries': log_entries,
             'log_types': log_types
         })
+
+
+@app.route('/paste', methods=['POST'])
+def paste_log():
+    data = request.get_json()
+    if not data or 'text' not in data:
+        return jsonify({'error': 'No log text provided'}), 400
+
+    text = data['text']
+    if not text.strip():
+        return jsonify({'error': 'Log text is empty'}), 400
+
+    lines = text.splitlines()
+    log_entries, log_types = _parse_log_lines(lines)
+
+    return jsonify({
+        'entries': log_entries,
+        'log_types': log_types
+    })
 
 @app.route('/filter', methods=['POST'])
 def filter_logs():

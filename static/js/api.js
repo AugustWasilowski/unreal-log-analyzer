@@ -18,6 +18,25 @@ class API {
         return await response.json();
     }
 
+    // Analyze pasted log text (no file upload needed)
+    static async pasteLog(text) {
+        const response = await Utils.handleApiCall(
+            () => fetch('/paste', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            }),
+            'Failed to analyze pasted log. Please try again.'
+        );
+        
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Error analyzing pasted log');
+        }
+        
+        return await response.json();
+    }
+
     // Filter logs by type
     static async filterLogs(filename, types) {
         const response = await Utils.handleApiCall(
@@ -39,4 +58,4 @@ class API {
 }
 
 // Export for use in other modules
-window.API = API; 
+window.API = API;
