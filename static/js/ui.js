@@ -213,7 +213,15 @@ class UI {
         
         logTypes.forEach(typeObj => {
             const badge = document.getElementById(`badge-type-${typeObj.type}`);
-            if (badge) badge.textContent = counts[typeObj.type];
+            if (badge) {
+                const count = counts[typeObj.type];
+                badge.textContent = count;
+                // Hide the entire category column when count is 0
+                const col = badge.closest('.col-md-3');
+                if (col) {
+                    col.style.display = count > 0 ? '' : 'none';
+                }
+            }
         });
     }
 
