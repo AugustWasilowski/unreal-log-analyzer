@@ -25,7 +25,8 @@ class UI {
             useRegex: document.getElementById('useRegex'),
             searchHistory: document.getElementById('searchHistory'),
             clearHistory: document.getElementById('clearHistory'),
-            collapseDuplicates: document.getElementById('collapseDuplicates')
+            collapseDuplicates: document.getElementById('collapseDuplicates'),
+            showEmptyCategories: document.getElementById('showEmptyCategories')
         };
     }
 
@@ -57,6 +58,13 @@ class UI {
         this.setupSearchHistory();
         console.log('Setting up keyboard navigation...');
         this.setupKeyboardNavigation();
+
+        if (this.elements.showEmptyCategories) {
+            this.elements.showEmptyCategories.addEventListener('change', () => {
+                window.app.updateDisplay();
+            });
+        }
+
         this.initialized = true;
     }
 
@@ -239,10 +247,11 @@ class UI {
             if (badge) {
                 const count = counts[typeObj.type];
                 badge.textContent = count;
-                // Hide the entire category column when count is 0
+                // Hide the entire category column when count is 0 (unless showEmptyCategories is checked)
                 const col = badge.closest('.col-md-3');
                 if (col) {
-                    col.style.display = count > 0 ? '' : 'none';
+                    const showEmpty = this.elements.showEmptyCategories && this.elements.showEmptyCategories.checked;
+                    col.style.display = (count > 0 || showEmpty) ? '' : 'none';
                 }
             }
         });
