@@ -26,7 +26,7 @@ class UI {
             searchHistory: document.getElementById('searchHistory'),
             clearHistory: document.getElementById('clearHistory'),
             collapseDuplicates: document.getElementById('collapseDuplicates'),
-            showEmptyCategories: document.getElementById('showEmptyCategories')
+            multiSelect: document.getElementById('multiSelect')
         };
     }
 
@@ -59,8 +59,8 @@ class UI {
         console.log('Setting up keyboard navigation...');
         this.setupKeyboardNavigation();
 
-        if (this.elements.showEmptyCategories) {
-            this.elements.showEmptyCategories.addEventListener('change', () => {
+        if (this.elements.multiSelect) {
+            this.elements.multiSelect.addEventListener('change', () => {
                 window.app.updateDisplay();
             });
         }
@@ -230,30 +230,49 @@ class UI {
 
     // Update log type counts
     updateLogTypeCounts(entries, logTypes) {
+        const multiSelect = this.elements.multiSelect && this.elements.multiSelect.checked;
+        const state = window.app.appState.getState();
         const counts = {};
         logTypes.forEach(typeObj => counts[typeObj.type] = 0);
-        
-        entries.forEach(entry => {
-            const level = window.app.appState.detectLogLevel(entry.content);
-            const state = window.app.appState.getState();
-            
-            if (state.filters.levels.length && !state.filters.levels.includes(level)) return;
-            if (state.filters.search && !entry.content.toLowerCase().includes(state.filters.search.toLowerCase())) return;
-            if (counts.hasOwnProperty(entry.type)) counts[entry.type]++;
-        });
-        
-        // When "show empty categories" is on, a category is eligible to appear only if it
-        // has at least one entry that passes the active level filters (ignoring search).
-        // This prevents categories that are entirely hidden by the level filter from appearing.
-        const showEmpty = this.elements.showEmptyCategories && this.elements.showEmptyCategories.checked;
+
+        if (multiSelect) {
+            // In multi-select mode, count each category using level+search filters only
+            // (ignoring the type filter) so selecting one category doesn't zero out the others.
+            state.allEntries.forEach(entry => {
+                if (!counts.hasOwnProperty(entry.type)) return;
+                const level = window.app.appState.detectLogLevel(entry.content);
+                if (state.filters.levels.length && !state.filters.levels.includes(level)) return;
+                if (state.filters.search) {
+                    const searchContent = state.filters.caseSensitive ? entry.content : entry.content.toLowerCase();
+                    const searchTerm = state.filters.caseSensitive ? state.filters.search : state.filters.search.toLowerCase();
+                    if (state.filters.useRegex) {
+                        try {
+                            if (!new RegExp(searchTerm, state.filters.caseSensitive ? '' : 'i').test(entry.content)) return;
+                        } catch (e) {
+                            if (!searchContent.includes(searchTerm)) return;
+                        }
+                    } else {
+                        if (!searchContent.includes(searchTerm)) return;
+                    }
+                }
+                counts[entry.type]++;
+            });
+        } else {
+            // Normal mode: entries are already filtered by type+level+search
+            entries.forEach(entry => {
+                if (counts.hasOwnProperty(entry.type)) counts[entry.type]++;
+            });
+        }
+
+        // Compute level-only counts to decide category visibility in multi-select mode.
+        // A category is only eligible to appear if it has entries that pass the level filter.
         let levelCounts = null;
-        if (showEmpty) {
+        if (multiSelect) {
             levelCounts = {};
             logTypes.forEach(typeObj => levelCounts[typeObj.type] = 0);
-            const allState = window.app.appState.getState();
-            allState.allEntries.forEach(entry => {
+            state.allEntries.forEach(entry => {
                 const level = window.app.appState.detectLogLevel(entry.content);
-                if (allState.filters.levels.length && !allState.filters.levels.includes(level)) return;
+                if (state.filters.levels.length && !state.filters.levels.includes(level)) return;
                 if (levelCounts.hasOwnProperty(entry.type)) levelCounts[entry.type]++;
             });
         }
@@ -265,7 +284,7 @@ class UI {
                 badge.textContent = count;
                 const col = badge.closest('.col-md-3');
                 if (col) {
-                    const hasLevelMatches = showEmpty && levelCounts[typeObj.type] > 0;
+                    const hasLevelMatches = multiSelect && levelCounts[typeObj.type] > 0;
                     col.style.display = (count > 0 || hasLevelMatches) ? '' : 'none';
                 }
             }
