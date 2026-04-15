@@ -10,7 +10,8 @@ class AppState {
                 types: [],
                 search: '',
                 caseSensitive: false,
-                useRegex: false
+                useRegex: false,
+                collapseDuplicates: false
             },
             searchHistory: [],
             ui: {
@@ -167,7 +168,7 @@ class AppState {
 
     getFilteredEntries() {
         const { allEntries, filters } = this.state;
-        return allEntries.filter(entry => {
+        const filtered = allEntries.filter(entry => {
             // Filter by log type
             if (filters.types.length && !filters.types.includes(entry.type)) {
                 return false;
@@ -183,7 +184,7 @@ class AppState {
             if (filters.search) {
                 const searchTerm = filters.search;
                 const content = entry.content;
-                
+
                 if (filters.useRegex) {
                     try {
                         const flags = filters.caseSensitive ? 'g' : 'gi';
@@ -210,6 +211,29 @@ class AppState {
 
             return true;
         });
+
+        // Collapse duplicate entries when the option is enabled
+        if (filters.collapseDuplicates) {
+            const seen = new Map(); // key -> index in collapsed array
+            const collapsed = [];
+            for (const entry of filtered) {
+                const level = this.detectLogLevel(entry.content);
+                const key = entry.type + '\x00' + level + '\x00' + entry.content;
+                if (seen.has(key)) {
+                    const existing = collapsed[seen.get(key)];
+                    existing.duplicateCount++;
+                    if (entry.timestamp) {
+                        existing.lastTimestamp = entry.timestamp;
+                    }
+                } else {
+                    seen.set(key, collapsed.length);
+                    collapsed.push({ ...entry, duplicateCount: 1, lastTimestamp: entry.timestamp || null });
+                }
+            }
+            return collapsed;
+        }
+
+        return filtered;
     }
 
     detectLogLevel(content) {

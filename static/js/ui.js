@@ -24,7 +24,8 @@ class UI {
             caseSensitive: document.getElementById('caseSensitive'),
             useRegex: document.getElementById('useRegex'),
             searchHistory: document.getElementById('searchHistory'),
-            clearHistory: document.getElementById('clearHistory')
+            clearHistory: document.getElementById('clearHistory'),
+            collapseDuplicates: document.getElementById('collapseDuplicates')
         };
     }
 
@@ -134,9 +135,13 @@ class UI {
             const levelClass = Utils.getLogLevelClass(level);
 
             // Show timestamp prefix if present (timestamped log format)
-            if (entry.timestamp) {
+            // When duplicates are collapsed, show the last occurrence's timestamp
+            const displayTimestamp = (entry.duplicateCount > 1 && entry.lastTimestamp)
+                ? entry.lastTimestamp
+                : entry.timestamp;
+            if (displayTimestamp) {
                 const timestampSpan = Utils.createElement('span', 'log-timestamp');
-                timestampSpan.textContent = `[${entry.timestamp}]`;
+                timestampSpan.textContent = `[${displayTimestamp}]`;
                 div.appendChild(timestampSpan);
                 div.appendChild(Utils.createTextNode(' '));
             }
@@ -151,6 +156,16 @@ class UI {
             div.appendChild(typeSpan);
             div.appendChild(Utils.createTextNode(' '));
             div.appendChild(contentSpan);
+
+            // Show duplicate count badge when entries are collapsed
+            if (entry.duplicateCount > 1) {
+                div.appendChild(Utils.createTextNode(' '));
+                const badge = Utils.createElement('span', 'badge log-duplicate-badge');
+                badge.title = `${entry.duplicateCount} occurrences`;
+                badge.textContent = `×${entry.duplicateCount}`;
+                div.appendChild(badge);
+            }
+
             fragment.appendChild(div);
         });
         
@@ -250,6 +265,11 @@ class UI {
     // Get search term from UI
     getSearchTerm() {
         return this.elements.logSearchInput.value.trim();
+    }
+
+    // Get collapse duplicates setting from UI
+    getCollapseDuplicates() {
+        return this.elements.collapseDuplicates ? this.elements.collapseDuplicates.checked : false;
     }
 
     // Get search options from UI

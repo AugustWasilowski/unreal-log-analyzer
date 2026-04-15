@@ -124,6 +124,13 @@ class LogAnalyzerApp {
             });
         }
 
+        if (this.ui.elements.collapseDuplicates) {
+            this.ui.elements.collapseDuplicates.addEventListener('change', () => {
+                this.appState.updateFilters({ collapseDuplicates: this.ui.getCollapseDuplicates() });
+                this.updateDisplay();
+            });
+        }
+
         // Log level filters
         const levelFilters = document.querySelectorAll('.log-level-filter');
         if (levelFilters.length > 0) {

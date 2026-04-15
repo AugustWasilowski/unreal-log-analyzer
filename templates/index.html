@@ -313,6 +313,16 @@
         #pasteLogText::placeholder {
             color: #666;
         }
+        .log-duplicate-badge {
+            background-color: #5a6acf;
+            color: #fff;
+            font-size: 0.75em;
+            padding: 1px 5px;
+            border-radius: 3px;
+            vertical-align: middle;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
     </style>
 </head>
 <body>
@@ -479,19 +489,24 @@
             <div class="collapse show" id="logTypeFiltersCollapse">
                 <div class="mb-3" id="logLevelFilters" role="group" aria-label="Log level filters">
                     <label class="form-check-label me-3">
-                        <input class="form-check-input me-1 log-level-filter" type="checkbox" value="Display" checked 
+                        <input class="form-check-input me-1 log-level-filter" type="checkbox" value="Display" checked
                                aria-label="Filter Display level logs">
                         Display <span class="badge bg-secondary" id="count-Display">0</span>
                     </label>
                     <label class="form-check-label me-3">
-                        <input class="form-check-input me-1 log-level-filter" type="checkbox" value="Warning" checked 
+                        <input class="form-check-input me-1 log-level-filter" type="checkbox" value="Warning" checked
                                aria-label="Filter Warning level logs">
                         Warning <span class="badge bg-secondary" id="count-Warning">0</span>
                     </label>
                     <label class="form-check-label me-3">
-                        <input class="form-check-input me-1 log-level-filter" type="checkbox" value="Error" checked 
+                        <input class="form-check-input me-1 log-level-filter" type="checkbox" value="Error" checked
                                aria-label="Filter Error level logs">
                         Error <span class="badge bg-secondary" id="count-Error">0</span>
+                    </label>
+                    <label class="form-check-label me-3 ms-3 border-start ps-3" style="border-color: #444 !important;">
+                        <input class="form-check-input me-1" type="checkbox" id="collapseDuplicates"
+                               aria-label="Collapse duplicate log entries">
+                        Collapse duplicates
                     </label>
                 </div>
                 <div id="logTypeFilters" class="row" role="group" aria-label="Log type filters">
