@@ -242,16 +242,31 @@ class UI {
             if (counts.hasOwnProperty(entry.type)) counts[entry.type]++;
         });
         
+        // When "show empty categories" is on, a category is eligible to appear only if it
+        // has at least one entry that passes the active level filters (ignoring search).
+        // This prevents categories that are entirely hidden by the level filter from appearing.
+        const showEmpty = this.elements.showEmptyCategories && this.elements.showEmptyCategories.checked;
+        let levelCounts = null;
+        if (showEmpty) {
+            levelCounts = {};
+            logTypes.forEach(typeObj => levelCounts[typeObj.type] = 0);
+            const allState = window.app.appState.getState();
+            allState.allEntries.forEach(entry => {
+                const level = window.app.appState.detectLogLevel(entry.content);
+                if (allState.filters.levels.length && !allState.filters.levels.includes(level)) return;
+                if (levelCounts.hasOwnProperty(entry.type)) levelCounts[entry.type]++;
+            });
+        }
+
         logTypes.forEach(typeObj => {
             const badge = document.getElementById(`badge-type-${typeObj.type}`);
             if (badge) {
                 const count = counts[typeObj.type];
                 badge.textContent = count;
-                // Hide the entire category column when count is 0 (unless showEmptyCategories is checked)
                 const col = badge.closest('.col-md-3');
                 if (col) {
-                    const showEmpty = this.elements.showEmptyCategories && this.elements.showEmptyCategories.checked;
-                    col.style.display = (count > 0 || showEmpty) ? '' : 'none';
+                    const hasLevelMatches = showEmpty && levelCounts[typeObj.type] > 0;
+                    col.style.display = (count > 0 || hasLevelMatches) ? '' : 'none';
                 }
             }
         });
