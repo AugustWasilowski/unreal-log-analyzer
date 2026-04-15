@@ -132,14 +132,22 @@ class UI {
             const div = Utils.createElement('div', 'log-entry', { tabindex: '0' });
             const level = window.app.appState.detectLogLevel(entry.content);
             const levelClass = Utils.getLogLevelClass(level);
-            
+
+            // Show timestamp prefix if present (timestamped log format)
+            if (entry.timestamp) {
+                const timestampSpan = Utils.createElement('span', 'log-timestamp');
+                timestampSpan.textContent = `[${entry.timestamp}]`;
+                div.appendChild(timestampSpan);
+                div.appendChild(Utils.createTextNode(' '));
+            }
+
             // Create spans for proper styling without XSS vulnerability
             const typeSpan = Utils.createElement('span', 'log-type');
             typeSpan.textContent = entry.type;
-            
+
             const contentSpan = Utils.createElement('span', levelClass);
             contentSpan.textContent = entry.content;
-            
+
             div.appendChild(typeSpan);
             div.appendChild(Utils.createTextNode(' '));
             div.appendChild(contentSpan);

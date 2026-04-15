@@ -11,9 +11,20 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Regex pattern to extract log category from Unreal Engine log lines.
-# Skips optional timestamp/frame blocks like [2024.01.15-10.30.45:123][  0]
-# then captures the category name (PascalCase identifier) before the first colon.
-LOG_CATEGORY_PATTERN = re.compile(r'(?:\[.*?\]\s*)*([A-Za-z][A-Za-z0-9_]*)\s*:')
+# Handles both timestamped and plain formats:
+#   [2024.01.15-10.30.45:123][  0]LogCore: Display: message  (with timestamp)
+#   LogCore: Display: message                                  (without timestamp)
+#
+# Group 1: timestamp string from the first bracket (e.g. "2024.01.15-10.30.45:123"), or None
+# Group 2: log category name (e.g. "LogCore")
+#
+# Uses [^\]]* (any char except ']') instead of .*? for reliable bracket matching.
+LOG_LINE_PATTERN = re.compile(
+    r'(?:\[([^\]]*)\]\s*)?'        # Optional first bracket — captures timestamp (group 1)
+    r'(?:\[[^\]]*\]\s*)*'          # Zero or more additional brackets (frame number, etc.)
+    r'([A-Za-z][A-Za-z0-9_]*)'    # Log category name (group 2)
+    r'\s*:'                        # Colon separator
+)
 
 @app.route('/')
 def index():
@@ -29,16 +40,21 @@ def _parse_log_lines(lines):
     log_type_counts = {}
 
     for line in lines:
-        if line.strip() and ':' in line:
-            match = LOG_CATEGORY_PATTERN.match(line)
-            if match:
-                log_category = match.group(1)
-                content_start = match.end()
-                log_type_counts[log_category] = log_type_counts.get(log_category, 0) + 1
-                log_entries.append({
-                    'type': log_category,
-                    'content': line[content_start:].strip()
-                })
+        if not line.strip() or ':' not in line:
+            continue
+        match = LOG_LINE_PATTERN.match(line)
+        if match:
+            timestamp = match.group(1)    # e.g. "2024.01.15-10.30.45:123", or None
+            log_category = match.group(2)
+            content_start = match.end()
+            log_type_counts[log_category] = log_type_counts.get(log_category, 0) + 1
+            entry = {
+                'type': log_category,
+                'content': line[content_start:].strip()
+            }
+            if timestamp:
+                entry['timestamp'] = timestamp
+            log_entries.append(entry)
 
     log_types = [{'type': t, 'count': log_type_counts[t]} for t in sorted(log_type_counts.keys())]
     return log_entries, log_types
@@ -103,16 +119,21 @@ def filter_logs():
     filtered_entries = []
     with open(filepath, 'r', encoding='utf-8') as f:
         for line in f:
-            if line.strip() and ':' in line:
-                match = LOG_CATEGORY_PATTERN.match(line)
-                if match:
-                    log_category = match.group(1)
-                    content_start = match.end()
-                    if not selected_types or log_category in selected_types:
-                        filtered_entries.append({
-                            'type': log_category,
-                            'content': line[content_start:].strip()
-                        })
+            if not line.strip() or ':' not in line:
+                continue
+            match = LOG_LINE_PATTERN.match(line)
+            if match:
+                timestamp = match.group(1)
+                log_category = match.group(2)
+                content_start = match.end()
+                if not selected_types or log_category in selected_types:
+                    entry = {
+                        'type': log_category,
+                        'content': line[content_start:].strip()
+                    }
+                    if timestamp:
+                        entry['timestamp'] = timestamp
+                    filtered_entries.append(entry)
     
     return jsonify({'entries': filtered_entries})
 
