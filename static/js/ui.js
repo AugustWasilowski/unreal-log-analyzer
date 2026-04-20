@@ -160,6 +160,9 @@ class UI {
 
             const contentSpan = Utils.createElement('span', levelClass);
             contentSpan.textContent = entry.content;
+            // pre-wrap so multi-line continuation content (e.g. callstacks) renders
+            // with preserved line breaks rather than collapsing to one long line.
+            contentSpan.style.whiteSpace = 'pre-wrap';
 
             div.appendChild(typeSpan);
             div.appendChild(Utils.createTextNode(' '));
@@ -369,7 +372,7 @@ class UI {
     }
 
     exportToJson() {
-        const entries = window.app.appState.getFilteredEntries();
+tml const entries = window.app.appState.getFilteredEntries();
         const jsonContent = JSON.stringify(entries, null, 2);
         this.downloadFile(jsonContent, 'log_entries.json', 'application/json');
     }
@@ -526,4 +529,4 @@ class UI {
 }
 
 // Export for use in other modules
-window.UI = UI; 
+window.UI = UI;
