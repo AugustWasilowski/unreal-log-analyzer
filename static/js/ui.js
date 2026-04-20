@@ -1,4 +1,4 @@
-// UI management and rendering - VERSION 1.3
+// UI management and rendering - VERSION 1.5
 
 class UI {
     constructor() {
@@ -160,6 +160,9 @@ class UI {
 
             const contentSpan = Utils.createElement('span', levelClass);
             contentSpan.textContent = entry.content;
+            // pre-wrap so multi-line continuation content (e.g. callstacks) renders
+            // with preserved line breaks rather than collapsing to one long line.
+            contentSpan.style.whiteSpace = 'pre-wrap';
 
             div.appendChild(typeSpan);
             div.appendChild(Utils.createTextNode(' '));
@@ -170,7 +173,7 @@ class UI {
                 div.appendChild(Utils.createTextNode(' '));
                 const badge = Utils.createElement('span', 'badge log-duplicate-badge');
                 badge.title = `${entry.duplicateCount} occurrences`;
-                badge.textContent = `×${entry.duplicateCount}`;
+                badge.textContent = `\u00d7${entry.duplicateCount}`;
                 div.appendChild(badge);
             }
 
@@ -526,4 +529,4 @@ class UI {
 }
 
 // Export for use in other modules
-window.UI = UI; 
+window.UI = UI;

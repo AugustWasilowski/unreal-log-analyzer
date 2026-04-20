@@ -50,9 +50,9 @@ COPY templates/ templates/
 COPY static/ static/
 COPY requirements.txt .
 
-# Create uploads directory with proper permissions
-RUN mkdir -p uploads && \
-    chown -R appuser:appuser /app
+# Set permissions for non-root user
+# No uploads directory needed — all log parsing is client-side.
+RUN chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser

@@ -1,61 +1,6 @@
-// API communication module
-class API {
-    // Upload log file
-    static async uploadFile(file) {
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        const response = await Utils.handleApiCall(
-            () => fetch('/upload', { method: 'POST', body: formData }),
-            'Failed to upload file. Please try again.'
-        );
-        
-        if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || 'Error uploading file');
-        }
-        
-        return await response.json();
-    }
-
-    // Analyze pasted log text (no file upload needed)
-    static async pasteLog(text) {
-        const response = await Utils.handleApiCall(
-            () => fetch('/paste', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text })
-            }),
-            'Failed to analyze pasted log. Please try again.'
-        );
-        
-        if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || 'Error analyzing pasted log');
-        }
-        
-        return await response.json();
-    }
-
-    // Filter logs by type
-    static async filterLogs(filename, types) {
-        const response = await Utils.handleApiCall(
-            () => fetch('/filter', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filename, types })
-            }),
-            'Failed to filter logs. Please try again.'
-        );
-        
-        if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || 'Error filtering logs');
-        }
-        
-        return await response.json();
-    }
-}
-
-// Export for use in other modules
-window.API = API;
+// api.js — REMOVED
+//
+// This module previously handled /upload, /paste, and /filter server endpoints.
+// All log parsing is now done client-side in log-parser.js (LogParser.parseLogLines).
+// Log data never leaves the browser. This file is kept as a placeholder so that
+// any external references do not 404, but it exports nothing.

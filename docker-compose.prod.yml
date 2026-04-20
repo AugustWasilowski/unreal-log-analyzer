@@ -8,8 +8,6 @@ services:
     environment:
       - FLASK_ENV=production
       - PORT=8080
-    volumes:
-      - uploads_data:/app/uploads
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/health', timeout=5)"]
@@ -17,7 +15,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-
-volumes:
-  uploads_data:
-    driver: local

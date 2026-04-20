@@ -1,4 +1,4 @@
-// Main application module - VERSION 1.3
+// Main application module - VERSION 1.6
 
 class LogAnalyzerApp {
     constructor() {
@@ -415,12 +415,19 @@ class LogAnalyzerApp {
         return memreportIndicators.some(pattern => pattern.test(content));
     }
 
-    // Handle log file upload
+    // Handle log file upload — reads file in the browser, no server upload.
     async handleLogFileUpload() {
         const file = this.ui.elements.logFile.files[0];
         
         if (!file) {
             Utils.showErrorToast('Please select a file');
+            return;
+        }
+
+        // Client-side size guard — reject files over 100 MB before reading.
+        const MAX_LOG_SIZE = 100 * 1024 * 1024;
+        if (file.size > MAX_LOG_SIZE) {
+            Utils.showErrorToast('File too large — maximum is 100 MB.');
             return;
         }
 
@@ -432,23 +439,53 @@ class LogAnalyzerApp {
         this.appState.pauseSubscriptions();
 
         try {
-            const data = await API.uploadFile(file);
-            
+            // Read the file entirely in the browser — no upload to server.
+            const text = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.onabort = () => reject(new Error('File reading was aborted'));
+                reader.readAsText(file);
+            });
+
+            // Validate: reject empty files.
+            if (text.trim().length === 0) {
+                throw new Error('File is empty.');
+            }
+
+            // Validate: reject binary-looking content.
+            // Sample first 4 KB; allow tab (9), LF (10), VT (11), FF (12), CR (13).
+            // Null bytes and other low control chars strongly suggest binary data.
+            const sampleSize = Math.min(text.length, 4096);
+            let nonPrintable = 0;
+            for (let i = 0; i < sampleSize; i++) {
+                const code = text.charCodeAt(i);
+                if (code === 0 || code < 9 || (code > 13 && code < 32)) {
+                    nonPrintable++;
+                }
+            }
+            if (nonPrintable / sampleSize > 0.1) {
+                throw new Error('File does not appear to be a text log file (binary content detected).');
+            }
+
+            const data = LogParser.parseLogLines(text);
+
             // First, update the data state
             this.appState.update({
                 currentFile: file.name,
                 allEntries: data.entries,
-                logTypes: data.log_types
+                logTypes: data.logTypes
             });
             
             // Update UI
-            this.ui.createLogTypeFilters(data.log_types);
+            this.ui.createLogTypeFilters(data.logTypes);
             
             // Update display directly
             this.updateDisplay();
             
         } catch (error) {
-            // Error already handled by API module
+            Utils.showErrorToast('Failed to read file: ' + error.message);
+            console.error('File read error:', error);
         } finally {
             // Reset UI state
             this.ui.updateButtonText('Refresh');
@@ -521,7 +558,7 @@ class LogAnalyzerApp {
         return this.handleLogFileUpload();
     }
 
-    // Handle paste log analysis
+    // Handle paste log analysis — parses in the browser, no server round-trip.
     async handlePasteAnalyze() {
         const textarea = document.getElementById('pasteLogText');
         const text = textarea ? textarea.value : '';
@@ -540,18 +577,20 @@ class LogAnalyzerApp {
         this.appState.pauseSubscriptions();
 
         try {
-            const data = await API.pasteLog(text);
+            // Parse entirely in the browser — no server round-trip.
+            const data = LogParser.parseLogLines(text);
 
             this.appState.update({
                 currentFile: 'pasted-log',
                 allEntries: data.entries,
-                logTypes: data.log_types
+                logTypes: data.logTypes
             });
 
-            this.ui.createLogTypeFilters(data.log_types);
+            this.ui.createLogTypeFilters(data.logTypes);
             this.updateDisplay();
         } catch (error) {
-            // Error already handled by API module
+            Utils.showErrorToast('Failed to parse log: ' + error.message);
+            console.error('Parse error:', error);
         } finally {
             if (analyzeButton) {
                 analyzeButton.textContent = 'Analyze';
@@ -565,6 +604,13 @@ class LogAnalyzerApp {
     handleSearchChange() {
         const searchTerm = this.ui.getSearchTerm();
         const searchOptions = this.ui.getSearchOptions();
+
+        // Regex DoS guard — reject patterns longer than 200 chars.
+        if (searchOptions.useRegex && searchTerm.length > 200) {
+            Utils.showErrorToast('Regex pattern too long — maximum is 200 characters.');
+            return;
+        }
+
         this.appState.updateFilters({ 
             search: searchTerm,
             caseSensitive: searchOptions.caseSensitive,
@@ -593,8 +639,26 @@ class LogAnalyzerApp {
     // Update display based on current state
     updateDisplay() {
         const state = this.appState.getState();
-        const filteredEntries = this.appState.getFilteredEntries();
-        
+
+        // Time regex searches and warn if slow (>300 ms) — part of DoS mitigation.
+        // Synchronous regex on large logs can block the main thread; surfacing the
+        // timing nudges users toward more specific patterns. Web Worker search
+        // (Task 2.4) will eliminate this entirely once implemented.
+        let filteredEntries;
+        if (state.filters.useRegex && state.filters.search) {
+            const t0 = performance.now();
+            filteredEntries = this.appState.getFilteredEntries();
+            const elapsed = performance.now() - t0;
+            if (elapsed > 300) {
+                Utils.showInfoToast(
+                    `Regex search took ${Math.round(elapsed)} ms — try a more specific pattern.`,
+                    'Slow search'
+                );
+            }
+        } else {
+            filteredEntries = this.appState.getFilteredEntries();
+        }
+
         // Update UI
         this.ui.displayLogEntries(filteredEntries);
         this.ui.updateLogLevelCounts(filteredEntries);
@@ -616,4 +680,4 @@ if (document.readyState === 'loading') {
     setTimeout(() => {
         window.app = LogAnalyzerApp.init();
     }, 100);
-} 
+}
