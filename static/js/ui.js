@@ -1,4 +1,4 @@
-// UI management and rendering - VERSION 1.3
+// UI management and rendering - VERSION 1.5
 
 class UI {
     constructor() {
@@ -173,7 +173,7 @@ class UI {
                 div.appendChild(Utils.createTextNode(' '));
                 const badge = Utils.createElement('span', 'badge log-duplicate-badge');
                 badge.title = `${entry.duplicateCount} occurrences`;
-                badge.textContent = `×${entry.duplicateCount}`;
+                badge.textContent = `\u00d7${entry.duplicateCount}`;
                 div.appendChild(badge);
             }
 
@@ -372,7 +372,7 @@ class UI {
     }
 
     exportToJson() {
-tml const entries = window.app.appState.getFilteredEntries();
+        const entries = window.app.appState.getFilteredEntries();
         const jsonContent = JSON.stringify(entries, null, 2);
         this.downloadFile(jsonContent, 'log_entries.json', 'application/json');
     }

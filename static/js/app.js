@@ -1,4 +1,4 @@
-// Main application module - VERSION 1.3
+// Main application module - VERSION 1.5
 
 class LogAnalyzerApp {
     constructor() {
@@ -415,12 +415,19 @@ class LogAnalyzerApp {
         return memreportIndicators.some(pattern => pattern.test(content));
     }
 
-    // Handle log file upload
+    // Handle log file upload — reads file in the browser, no server upload.
     async handleLogFileUpload() {
         const file = this.ui.elements.logFile.files[0];
         
         if (!file) {
             Utils.showErrorToast('Please select a file');
+            return;
+        }
+
+        // Client-side size guard — reject files over 100 MB before reading.
+        const MAX_LOG_SIZE = 100 * 1024 * 1024;
+        if (file.size > MAX_LOG_SIZE) {
+            Utils.showErrorToast('File too large — maximum is 100 MB.');
             return;
         }
 
@@ -432,23 +439,33 @@ class LogAnalyzerApp {
         this.appState.pauseSubscriptions();
 
         try {
-            const data = await API.uploadFile(file);
-            
+            // Read the file entirely in the browser — no upload to server.
+            const text = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.onabort = () => reject(new Error('File reading was aborted'));
+                reader.readAsText(file);
+            });
+
+            const data = LogParser.parseLogLines(text);
+
             // First, update the data state
             this.appState.update({
                 currentFile: file.name,
                 allEntries: data.entries,
-                logTypes: data.log_types
+                logTypes: data.logTypes
             });
             
             // Update UI
-            this.ui.createLogTypeFilters(data.log_types);
+            this.ui.createLogTypeFilters(data.logTypes);
             
             // Update display directly
             this.updateDisplay();
             
         } catch (error) {
-            // Error already handled by API module
+            Utils.showErrorToast('Failed to read file: ' + error.message);
+            console.error('File read error:', error);
         } finally {
             // Reset UI state
             this.ui.updateButtonText('Refresh');
@@ -521,7 +538,7 @@ class LogAnalyzerApp {
         return this.handleLogFileUpload();
     }
 
-    // Handle paste log analysis
+    // Handle paste log analysis — parses in the browser, no server round-trip.
     async handlePasteAnalyze() {
         const textarea = document.getElementById('pasteLogText');
         const text = textarea ? textarea.value : '';
@@ -540,18 +557,20 @@ class LogAnalyzerApp {
         this.appState.pauseSubscriptions();
 
         try {
-            const data = await API.pasteLog(text);
+            // Parse entirely in the browser — no server round-trip.
+            const data = LogParser.parseLogLines(text);
 
             this.appState.update({
                 currentFile: 'pasted-log',
                 allEntries: data.entries,
-                logTypes: data.log_types
+                logTypes: data.logTypes
             });
 
-            this.ui.createLogTypeFilters(data.log_types);
+            this.ui.createLogTypeFilters(data.logTypes);
             this.updateDisplay();
         } catch (error) {
-            // Error already handled by API module
+            Utils.showErrorToast('Failed to parse log: ' + error.message);
+            console.error('Parse error:', error);
         } finally {
             if (analyzeButton) {
                 analyzeButton.textContent = 'Analyze';
@@ -616,4 +635,4 @@ if (document.readyState === 'loading') {
     setTimeout(() => {
         window.app = LogAnalyzerApp.init();
     }, 100);
-} 
+}
