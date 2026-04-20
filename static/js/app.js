@@ -1,4 +1,4 @@
-// Main application module - VERSION 1.7
+// Main application module - VERSION 1.8
 
 class LogAnalyzerApp {
     constructor() {
@@ -7,6 +7,9 @@ class LogAnalyzerApp {
         this.routes = { 'log': 'log-panel', 'memreport': 'memreport-panel' };
         this.currentRoute = 'log';
         this.memreportPage = null;
+        this.searchWorker = null;
+        this._searchId = 0;
+        this._searchTimeout = null;
         this.initializeApp();
     }
 
@@ -14,6 +17,7 @@ class LogAnalyzerApp {
         this.ui.initialize();
         this.setupEventListeners();
         this.setupStateSubscriptions();
+        this.initSearchWorker();
     }
 
     setupEventListeners() {
@@ -112,6 +116,117 @@ class LogAnalyzerApp {
         this.appState.subscribe((state) => this.handleStateChange(state));
     }
 
+
+    initSearchWorker() {
+        if (typeof Worker === 'undefined') return;
+        try {
+            this.searchWorker = new Worker('/static/js/search-worker.js');
+            this.searchWorker.onmessage = (e) => this._handleWorkerMessage(e.data);
+            this.searchWorker.onerror = (err) => {
+                console.error('Search worker error:', err);
+                this.searchWorker = null;
+                this._clearSearchSpinner();
+            };
+        } catch (e) {
+            console.warn('Could not start search worker:', e);
+            this.searchWorker = null;
+        }
+    }
+
+    _sendEntriesToWorker(entries) {
+        if (this.searchWorker) {
+            this.searchWorker.postMessage({ type: 'setEntries', entries });
+        }
+    }
+
+    _handleWorkerMessage(data) {
+        if (data.type === 'error') {
+            this._clearSearchSpinner();
+            if (this._searchTimeout) { clearTimeout(this._searchTimeout); this._searchTimeout = null; }
+            Utils.showErrorToast('Search error: ' + data.message);
+            return;
+        }
+        if (data.type !== 'result') return;
+        if (data.id !== this._searchId) return; // stale result
+
+        this._clearSearchSpinner();
+        if (this._searchTimeout) { clearTimeout(this._searchTimeout); this._searchTimeout = null; }
+
+        if (data.ms !== undefined && data.ms > 300)
+            Utils.showInfoToast(`Search took ${Math.round(data.ms)} ms — try a more specific pattern.`, 'Slow search');
+
+        const state = this.appState.getState();
+        let entries;
+        if (data.indices === null) {
+            entries = state.allEntries;
+        } else {
+            entries = data.indices.map(i => state.allEntries[i]);
+        }
+        const filteredEntries = this._applyNonSearchFilters(entries, state.filters);
+        this.ui.displayLogEntries(filteredEntries);
+        this.ui.updateLogLevelCounts(filteredEntries);
+        this.ui.updateLogTypeCounts(filteredEntries, state.logTypes);
+    }
+
+    _applyNonSearchFilters(entries, filters) {
+        let result = entries;
+        if (filters.types.length) result = result.filter(e => filters.types.includes(e.type));
+        if (filters.levels.length) {
+            result = result.filter(e => {
+                const c = e.content;
+                let level = '';
+                if (/\bWarning\b/i.test(c)) level = 'Warning';
+                else if (/\bError\b/i.test(c)) level = 'Error';
+                else if (/\bDisplay\b/i.test(c)) level = 'Display';
+                return filters.levels.includes(level);
+            });
+        }
+        if (filters.collapseDuplicates) {
+            const seen = new Map(); const collapsed = [];
+            for (const entry of result) {
+                const c = entry.content;
+                let level = '';
+                if (/\bWarning\b/i.test(c)) level = 'Warning';
+                else if (/\bError\b/i.test(c)) level = 'Error';
+                else if (/\bDisplay\b/i.test(c)) level = 'Display';
+                const key = entry.type + '\x00' + level + '\x00' + entry.content;
+                if (seen.has(key)) {
+                    const ex = collapsed[seen.get(key)]; ex.duplicateCount++;
+                    if (entry.timestamp) ex.lastTimestamp = entry.timestamp;
+                } else { seen.set(key, collapsed.length); collapsed.push({ ...entry, duplicateCount: 1, lastTimestamp: entry.timestamp || null }); }
+            }
+            return collapsed;
+        }
+        return result;
+    }
+
+    _showSearchSpinner() {
+        let el = document.getElementById('searchStatus');
+        if (el) { el.style.display = 'flex'; return; }
+        if (!document.getElementById('_searchSpinnerStyle')) {
+            const style = document.createElement('style');
+            style.id = '_searchSpinnerStyle';
+            style.textContent = '@keyframes _spin{to{transform:rotate(360deg)}} #searchStatus{position:absolute;top:6px;right:12px;display:flex;align-items:center;gap:8px;color:#aaa;font-size:0.85em;z-index:20} #searchStatus ._spinner{width:14px;height:14px;border:2px solid #555;border-top-color:#4fc3f7;border-radius:50%;animation:_spin .7s linear infinite}';
+            document.head.appendChild(style);
+        }
+        el = document.createElement('div');
+        el.id = 'searchStatus';
+        const spin = document.createElement('div'); spin.className = '_spinner';
+        const txt = document.createElement('span'); txt.textContent = 'Searching…';
+        const cancel = document.createElement('button');
+        cancel.textContent = '×'; cancel.title = 'Cancel search';
+        cancel.style.cssText = 'background:none;border:none;color:#888;cursor:pointer;font-size:1.1em;padding:0 2px;';
+        cancel.onclick = () => { this._searchId++; this._clearSearchSpinner(); if (this._searchTimeout){clearTimeout(this._searchTimeout);this._searchTimeout=null;} };
+        el.appendChild(spin); el.appendChild(txt); el.appendChild(cancel);
+        const lc = document.getElementById('logContent');
+        if (lc) lc.appendChild(el);
+    }
+
+    _clearSearchSpinner() {
+        const el = document.getElementById('searchStatus');
+        if (el) el.style.display = 'none';
+    }
+
     handleStateChange(state) {
         if (state.allEntries.length > 0) this.updateDisplay();
     }
@@ -198,7 +313,7 @@ class LogAnalyzerApp {
         ].some(p => p.test(content));
     }
 
-    // ── Crash-first panel ────────────────────────────────────────────────────
+    // ── Crash-first panel ─────────────────────────────────────────────────────────────────────────
     // Categories whose Error-level entries are always surfaced in the crash panel.
     static get CRASH_CATEGORIES() {
         return new Set(['LogOutputDevice', 'LogWindows', 'LogCore', 'LogInit']);
@@ -286,7 +401,6 @@ class LogAnalyzerApp {
         list.appendChild(fragment);
     }
 
-    // Scroll to and briefly highlight a crash entry in the main log view.
     scrollToCrashEntry(entry) {
         const logContent = document.getElementById('logContent');
         if (!logContent) return;
@@ -302,14 +416,12 @@ class LogAnalyzerApp {
 
         let target = findEl();
         if (!target) {
-            // Entry is filtered out — clear type + search filters and re-render.
             this.appState.updateFilters({ types: [], search: '', useRegex: false });
             this.updateDisplay();
             target = findEl();
         }
 
         if (target) {
-            // Switch to the log tab if we're on another tab.
             if (this.currentRoute !== 'log') this.switchRoute('log');
             target.scrollIntoView({ behavior: 'smooth', block: 'center' });
             target.classList.add('crash-highlight');
@@ -317,14 +429,14 @@ class LogAnalyzerApp {
             setTimeout(() => target.classList.remove('crash-highlight'), 2500);
         }
     }
-    // ─────────────────────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────────
 
     async handleLogFileUpload() {
         const file = this.ui.elements.logFile.files[0];
         if (!file) { Utils.showErrorToast('Please select a file'); return; }
 
         const MAX_LOG_SIZE = 100 * 1024 * 1024;
-        if (file.size > MAX_LOG_SIZE) { Utils.showErrorToast('File too large \u2014 maximum is 100\u202fMB.'); return; }
+        if (file.size > MAX_LOG_SIZE) { Utils.showErrorToast('File too large — maximum is 100 MB.'); return; }
 
         this.ui.updateButtonText('Loading...');
         this.ui.setButtonDisabled(true);
@@ -353,6 +465,7 @@ class LogAnalyzerApp {
             const data = LogParser.parseLogLines(text);
             this.appState.update({ currentFile: file.name, allEntries: data.entries, logTypes: data.logTypes });
             this.ui.createLogTypeFilters(data.logTypes);
+            this._sendEntriesToWorker(data.entries);
             this.updateDisplay();
         } catch (error) {
             Utils.showErrorToast('Failed to read file: ' + error.message);
@@ -400,6 +513,7 @@ class LogAnalyzerApp {
             const data = LogParser.parseLogLines(text);
             this.appState.update({ currentFile: 'pasted-log', allEntries: data.entries, logTypes: data.logTypes });
             this.ui.createLogTypeFilters(data.logTypes);
+            this._sendEntriesToWorker(data.entries);
             this.updateDisplay();
         } catch (error) {
             Utils.showErrorToast('Failed to parse log: ' + error.message);
@@ -414,11 +528,37 @@ class LogAnalyzerApp {
         const searchTerm = this.ui.getSearchTerm();
         const searchOptions = this.ui.getSearchOptions();
         if (searchOptions.useRegex && searchTerm.length > 200) {
-            Utils.showErrorToast('Regex pattern too long \u2014 maximum is 200 characters.');
+            Utils.showErrorToast('Regex pattern too long — maximum is 200 characters.');
             return;
         }
         this.appState.updateFilters({ search: searchTerm, caseSensitive: searchOptions.caseSensitive, useRegex: searchOptions.useRegex });
-        this.updateDisplay();
+
+        const state = this.appState.getState();
+        if (this.searchWorker && state.allEntries.length > 0) {
+            this._showSearchSpinner();
+            this._searchId++;
+            const id = this._searchId;
+            if (this._searchTimeout) { clearTimeout(this._searchTimeout); }
+            this._searchTimeout = setTimeout(() => {
+                if (this._searchId === id) {
+                    this.searchWorker.terminate();
+                    this.searchWorker = null;
+                    this._clearSearchSpinner();
+                    Utils.showInfoToast('Search timed out — try a simpler pattern.', 'Timeout');
+                    this.initSearchWorker();
+                    this._sendEntriesToWorker(state.allEntries);
+                    this.updateDisplay();
+                }
+            }, 500);
+            this.searchWorker.postMessage({
+                type: 'search', id,
+                query: searchTerm,
+                isRegex: searchOptions.useRegex,
+                caseSensitive: searchOptions.caseSensitive
+            });
+        } else {
+            this.updateDisplay();
+        }
     }
 
     handleLevelFilterChange() {
@@ -434,22 +574,8 @@ class LogAnalyzerApp {
 
     updateDisplay() {
         const state = this.appState.getState();
-
-        // Crash panel — derives from allEntries, not filtered view.
         this.renderCrashPanel(state.allEntries);
-
-        // Time regex searches and warn if slow (>300 ms).
-        let filteredEntries;
-        if (state.filters.useRegex && state.filters.search) {
-            const t0 = performance.now();
-            filteredEntries = this.appState.getFilteredEntries();
-            const elapsed = performance.now() - t0;
-            if (elapsed > 300)
-                Utils.showInfoToast(`Regex search took ${Math.round(elapsed)}\u202fms \u2014 try a more specific pattern.`, 'Slow search');
-        } else {
-            filteredEntries = this.appState.getFilteredEntries();
-        }
-
+        const filteredEntries = this.appState.getFilteredEntries();
         this.ui.displayLogEntries(filteredEntries);
         this.ui.updateLogLevelCounts(filteredEntries);
         this.ui.updateLogTypeCounts(filteredEntries, state.logTypes);
