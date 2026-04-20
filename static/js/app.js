@@ -1,4 +1,4 @@
-// Main application module - VERSION 1.5
+// Main application module - VERSION 1.6
 
 class LogAnalyzerApp {
     constructor() {
@@ -448,6 +448,26 @@ class LogAnalyzerApp {
                 reader.readAsText(file);
             });
 
+            // Validate: reject empty files.
+            if (text.trim().length === 0) {
+                throw new Error('File is empty.');
+            }
+
+            // Validate: reject binary-looking content.
+            // Sample first 4 KB; allow tab (9), LF (10), VT (11), FF (12), CR (13).
+            // Null bytes and other low control chars strongly suggest binary data.
+            const sampleSize = Math.min(text.length, 4096);
+            let nonPrintable = 0;
+            for (let i = 0; i < sampleSize; i++) {
+                const code = text.charCodeAt(i);
+                if (code === 0 || code < 9 || (code > 13 && code < 32)) {
+                    nonPrintable++;
+                }
+            }
+            if (nonPrintable / sampleSize > 0.1) {
+                throw new Error('File does not appear to be a text log file (binary content detected).');
+            }
+
             const data = LogParser.parseLogLines(text);
 
             // First, update the data state
@@ -584,6 +604,13 @@ class LogAnalyzerApp {
     handleSearchChange() {
         const searchTerm = this.ui.getSearchTerm();
         const searchOptions = this.ui.getSearchOptions();
+
+        // Regex DoS guard — reject patterns longer than 200 chars.
+        if (searchOptions.useRegex && searchTerm.length > 200) {
+            Utils.showErrorToast('Regex pattern too long — maximum is 200 characters.');
+            return;
+        }
+
         this.appState.updateFilters({ 
             search: searchTerm,
             caseSensitive: searchOptions.caseSensitive,
@@ -612,8 +639,26 @@ class LogAnalyzerApp {
     // Update display based on current state
     updateDisplay() {
         const state = this.appState.getState();
-        const filteredEntries = this.appState.getFilteredEntries();
-        
+
+        // Time regex searches and warn if slow (>300 ms) — part of DoS mitigation.
+        // Synchronous regex on large logs can block the main thread; surfacing the
+        // timing nudges users toward more specific patterns. Web Worker search
+        // (Task 2.4) will eliminate this entirely once implemented.
+        let filteredEntries;
+        if (state.filters.useRegex && state.filters.search) {
+            const t0 = performance.now();
+            filteredEntries = this.appState.getFilteredEntries();
+            const elapsed = performance.now() - t0;
+            if (elapsed > 300) {
+                Utils.showInfoToast(
+                    `Regex search took ${Math.round(elapsed)} ms — try a more specific pattern.`,
+                    'Slow search'
+                );
+            }
+        } else {
+            filteredEntries = this.appState.getFilteredEntries();
+        }
+
         // Update UI
         this.ui.displayLogEntries(filteredEntries);
         this.ui.updateLogLevelCounts(filteredEntries);
