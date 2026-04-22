@@ -578,7 +578,13 @@ class MemReportPage {
 
         // Get ordered sections (pinned first)
         const orderedSections = this.appState.getOrderedMemReportSections();
-        
+
+        // Texture to-do card — injected before all other sections
+        const textureTodoCard = this.renderTextureTodoCard(orderedSections);
+        if (textureTodoCard) {
+            memreportContainer.appendChild(textureTodoCard);
+        }
+
         // Render each section
         orderedSections.forEach(section => {
             const sectionElement = this.renderSection(section);
@@ -598,6 +604,119 @@ class MemReportPage {
         
         // Announce to screen readers
         Utils.announceToScreenReader(`MemReport loaded with ${orderedSections.length} sections`);
+    }
+
+    // Render the texture to-do collapsible card
+    renderTextureTodoCard(sections) {
+        if (typeof TextureTodo === 'undefined') return null;
+
+        const { rows, counts } = TextureTodo.process(sections);
+        if (rows.length === 0) return null;
+
+        const PRIORITY_BG    = { P0: 'rgba(220,53,69,0.15)',  P1: 'rgba(253,126,20,0.12)', P2: 'rgba(255,193,7,0.08)' };
+        const PRIORITY_COLOR = { P0: '#ff6b6b', P1: '#fd7e14', P2: '#ffc107' };
+        const collapseId = 'texture-todo-collapse';
+
+        // Card
+        const card = Utils.createElement('div', 'card mb-3', {
+            style: 'background-color: #23272b; border: 2px solid #dc3545; color: #e0e0e0;'
+        });
+
+        // Header (acts as collapse toggle)
+        const header = Utils.createElement('div', 'card-header', {
+            style: 'background-color: #3a1a1e; border-bottom: 1px solid #dc3545; cursor: pointer; user-select: none;',
+            'data-bs-toggle': 'collapse',
+            'data-bs-target': `#${collapseId}`,
+            'aria-expanded': 'false',
+            'aria-controls': collapseId,
+            role: 'button',
+        });
+
+        const headerRow = Utils.createElement('div', 'd-flex justify-content-between align-items-center');
+
+        const titleGroup = Utils.createElement('div', 'd-flex align-items-center gap-2 flex-wrap');
+        const titleEl = Utils.createElement('h5', 'mb-0 me-2');
+        titleEl.textContent = '⚠️ Texture To-Do List';
+        titleGroup.appendChild(titleEl);
+
+        const badgeDefs = [
+            { key: 'P0', bg: '#dc3545' },
+            { key: 'P1', bg: '#fd7e14' },
+            { key: 'P2', bg: '#ffc107', color: '#000' },
+        ];
+        badgeDefs.forEach(({ key, bg, color = '#fff' }) => {
+            if (counts[key] > 0) {
+                const b = Utils.createElement('span', 'badge me-1', { style: `background-color:${bg}; color:${color};` });
+                b.textContent = `${key}: ${counts[key]}`;
+                titleGroup.appendChild(b);
+            }
+        });
+
+        const totalBadge = Utils.createElement('span', 'badge', { style: 'background-color:#444; color:#e0e0e0;' });
+        totalBadge.textContent = `${rows.length} textures`;
+
+        headerRow.appendChild(titleGroup);
+        headerRow.appendChild(totalBadge);
+        header.appendChild(headerRow);
+        card.appendChild(header);
+
+        // Collapsible body — starts closed
+        const collapseDiv = Utils.createElement('div', 'collapse', { id: collapseId });
+        const body = Utils.createElement('div', 'card-body p-0');
+
+        const tableWrapper = Utils.createElement('div', 'table-responsive');
+        const table = Utils.createElement('table', 'table table-sm table-dark mb-0', {
+            style: 'font-size: 0.8rem;'
+        });
+
+        // thead
+        const thead = Utils.createElement('thead');
+        const theadRow = Utils.createElement('tr', '', { style: 'background-color: #2d3136;' });
+        ['Priority', 'Asset Name', 'Size (MB)', 'Format', 'Group', 'Issues', 'Suggested Action']
+            .forEach(label => {
+                const th = Utils.createElement('th', '', {
+                    scope: 'col',
+                    style: 'white-space: nowrap; color: #aaa; font-weight: 500; padding: 0.4rem 0.6rem;'
+                });
+                th.textContent = label;
+                theadRow.appendChild(th);
+            });
+        thead.appendChild(theadRow);
+        table.appendChild(thead);
+
+        // tbody
+        const tbody = Utils.createElement('tbody');
+        rows.forEach(item => {
+            const tr = Utils.createElement('tr', '', {
+                style: `background-color: ${PRIORITY_BG[item.priority] || 'transparent'}; border-bottom: 1px solid #333;`
+            });
+
+            const cells = [
+                { text: item.priority,             style: `font-weight:bold; color:${PRIORITY_COLOR[item.priority]}; white-space:nowrap; padding:0.35rem 0.6rem;` },
+                { text: item.assetName,            style: 'font-family:monospace; word-break:break-all; max-width:240px; padding:0.35rem 0.6rem;' },
+                { text: item.sizeMb.toFixed(2),    style: 'text-align:right; white-space:nowrap; padding:0.35rem 0.6rem;' },
+                { text: item.format,               style: 'font-family:monospace; white-space:nowrap; padding:0.35rem 0.6rem;' },
+                { text: item.group,                style: 'white-space:nowrap; padding:0.35rem 0.6rem;' },
+                { text: item.issues.join('; '),    style: 'color:#ccc; font-size:0.75rem; padding:0.35rem 0.6rem;' },
+                { text: item.suggestion,           style: 'color:#90ee90; font-size:0.75rem; padding:0.35rem 0.6rem;' },
+            ];
+
+            cells.forEach(({ text, style }) => {
+                const td = Utils.createElement('td', '', { style });
+                td.textContent = text;
+                tr.appendChild(td);
+            });
+
+            tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        tableWrapper.appendChild(table);
+        body.appendChild(tableWrapper);
+        collapseDiv.appendChild(body);
+        card.appendChild(collapseDiv);
+
+        return card;
     }
 
     // Render metadata overview section

@@ -1076,25 +1076,28 @@ class MemReportParser {
      * Parse a texture listing row
      */
     static parseTextureRow(line) {
-        // Texture format: "8192x8192 (262144 KB, 0), 8192x8192 (262144 KB), PF_R32_UINT, TEXTUREGROUP_World, /Engine/Transient.Texture..., NO, NO, NO, 0, 1, NO"
-        const parts = line.split(', ');
-        if (parts.length < 6) {
+        // Format: "WxH (SIZE KB, BIAS), WxH (SIZE KB), Format, LODGroup, Path, Stream, UnkRef, VT, UsageCount, NumMips, Uncompressed"
+        // The first field contains an inner comma "(SIZE KB, BIAS)" so naive split(', ') shifts every column.
+        // Use regex to extract fields correctly.
+        const match = line.match(
+            /^(\d+x\d+\s+\(\d+\s+KB,[^)]+\)),\s*(\d+x\d+\s+\(\d+\s+KB\)),\s*(\w+),\s*(\w+),\s*([^,]+),\s*(\w+),\s*(\w+),\s*(\w+),\s*(\d+),\s*(\d+),\s*(\w+)/
+        );
+        if (!match) {
             throw new Error('Invalid texture row format');
         }
-
-        const maxSize = parts[0].trim();
-        const currentSize = parts[1].trim();
-        const format = parts[2].trim();
-        const lodGroup = parts[3].trim();
-        const name = parts[4].trim();
-        const streaming = parts[5]?.trim() || '';
-        const unknownRef = parts[6]?.trim() || '';
-        const vt = parts[7]?.trim() || '';
-        const usageCount = parts[8]?.trim() || '';
-        const numMips = parts[9]?.trim() || '';
-        const uncompressed = parts[10]?.trim() || '';
-
-        return [maxSize, currentSize, format, lodGroup, name, streaming, unknownRef, vt, usageCount, numMips, uncompressed];
+        return [
+            match[1].trim(),  // MaxSize:    "WxH (KB, bias)"
+            match[2].trim(),  // CurrentSize: "WxH (KB)"
+            match[3].trim(),  // Format
+            match[4].trim(),  // LODGroup
+            match[5].trim(),  // Name / asset path
+            match[6].trim(),  // Streaming
+            match[7].trim(),  // UnknownRef
+            match[8].trim(),  // VT
+            match[9].trim(),  // UsageCount
+            match[10].trim(), // NumMips
+            match[11].trim(), // Uncompressed
+        ];
     }
 
     /**
