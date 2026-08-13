@@ -1,3 +1,5 @@
+
+
 # Unreal Engine Log Analyzer
 
 A modern, accessible web application for analyzing Unreal Engine log files with advanced filtering, search, and export capabilities.
@@ -88,10 +90,9 @@ The application uses a modular JavaScript architecture with separated concerns:
 ## Technical Details
 
 ### Backend (Flask)
-- File upload handling with size limits
-- Log parsing with Unreal Engine category recognition
-- RESTful API endpoints for upload and filtering
-- Secure filename handling
+- Lightweight static file server that renders the main interface
+- Health check endpoint (`/health`) for monitoring and container orchestration
+- No server-side log processing; all parsing, filtering, and data handling occur client-side for privacy and performance
 
 ### Frontend (Vanilla JavaScript)
 - Modular ES6 class-based architecture
